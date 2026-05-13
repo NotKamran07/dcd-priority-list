@@ -452,12 +452,12 @@ function renderTable() {
       ? (isDone ? eff['Open Orders'] : (eff['Open Orders'] !== '' ? eff['Open Orders'] : ''))
       : '';
 
-    const tickCount = getTickCount(partId);
+    const rowTickCount = getTickCount(partId);
     tr.innerHTML = `
       <td class="tick-cell">
         <div class="tick-counter">
-          <button class="tick-minus" onclick="removeTick('${partId}')" ${tickCount === 0 ? 'disabled' : ''}>−</button>
-          <span class="tick-num ${tickCount > 0 ? 'ticked' : ''}">${tickCount}</span>
+          <button class="tick-minus" onclick="removeTick('${partId}')" ${rowTickCount === 0 ? 'disabled' : ''}>−</button>
+          <span class="tick-num ${rowTickCount > 0 ? 'ticked' : ''}">${rowTickCount}</span>
           <button class="tick-plus" onclick="addTick('${partId}')">+</button>
         </div>
       </td>

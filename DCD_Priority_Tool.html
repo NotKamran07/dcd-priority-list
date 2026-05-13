@@ -426,8 +426,9 @@ function renderTable() {
   let rows = outputRows.filter(r => {
     if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
     const eff = getEffectiveRow(r);
-    // Only remove from list when fully done
-    if (eff._fullyDone) return false;
+    // Hide fully done items when showDone is false
+    if (!showDone && eff._fullyDone) return false;
+    // Hide partially ticked items when showDone is false
     if (!showDone && getTickCount(r['Part ID']) > 0) return false;
     return !search || r['Part ID'].toLowerCase().includes(search) || (r['Repair Team'] || '').toLowerCase().includes(search);
   });
@@ -487,7 +488,10 @@ function renderTable() {
   document.getElementById('row-count').textContent = `${rows.length} parts shown`;
 
   // Zero qty section
-  const zeroRows = outputRows.filter(r => (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') && !ticks[safeKey(r['Part ID'])]);
+  const zeroRows = outputRows.filter(r => {
+    const eff = getEffectiveRow(r);
+    return (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') && !eff._fullyDone;
+  });
   const zeroSection = document.getElementById('zero-section');
   const zeroBody = document.getElementById('zero-body');
   document.getElementById('zero-count').textContent = `(${zeroRows.length})`;

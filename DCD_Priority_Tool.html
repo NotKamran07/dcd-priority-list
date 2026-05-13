@@ -24,6 +24,11 @@
   body.light-mode #zero-table td { color: #222; }
   body.light-mode .zero-heading { color: #333; }
   body.light-mode #completed-table td { background: var(--done-bg); color: #222; }
+  body.light-mode .grade-A, body.light-mode .grade-M { color: #444 !important; }
+  body.light-mode .grade-B { color: #7a6000 !important; }
+  body.light-mode .grade-C { color: #7a3d00 !important; }
+  body.light-mode .grade-S { color: #7a2000 !important; }
+  body.light-mode .grade-X { color: #8a0000 !important; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; min-height: 100vh; }
   header { padding: 1.5rem 2.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1.2rem; }
@@ -570,10 +575,8 @@ function renderTable() {
   let rows = outputRows.filter(r => {
     if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
     const eff = getEffectiveRow(r);
-    // Hide fully done items when showDone is false
+    // Only hide when FULLY done (open orders AND rep req both at 0)
     if (!showDone && eff._fullyDone) return false;
-    // Hide partially ticked items when showDone is false
-    if (!showDone && getTickCount(r['Part ID']) > 0) return false;
     if (deptFilter !== 'all' && (r['Repair Team'] || '').trim() !== deptFilter) return false;
     return !search || r['Part ID'].toLowerCase().includes(search) || (r['Repair Team'] || '').toLowerCase().includes(search);
   });

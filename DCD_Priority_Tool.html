@@ -5,12 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>DCD Priority Work List</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
   :root {
     --bg: #0e0f13; --surface: #16181f; --surface2: #1e2029; --border: #2a2c38;
     --accent: #e8523a; --accent2: #3a7bd5; --text: #e8e9ed; --muted: #6b6f82;
-    --rank1-bg: #2a1a17; --rank1-alt: #241512; --rank2-bg: #131c2e; --rank2-alt: #101827; --green: #2ecc71;
+    --rank1-bg: #2a1a17; --rank1-alt: #241512; --rank2-bg: #131c2e; --rank2-alt: #101827;
+    --green: #2ecc71; --done-bg: #0f1f14; --done-alt: #0d1b11;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; min-height: 100vh; }
@@ -32,14 +35,19 @@
   .stat-value { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; }
   .stat-value.r1 { color: var(--accent); }
   .stat-value.r2 { color: var(--accent2); }
+  .stat-value.done { color: var(--green); }
   #actions-bar { display: none; padding: 1rem 2.5rem; border-bottom: 1px solid var(--border); gap: 1rem; align-items: center; flex-wrap: wrap; }
   #search-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; padding: 0.45rem 0.85rem; border-radius: 2px; width: 250px; outline: none; }
   #search-input:focus { border-color: var(--muted); }
-  #export-btn, #refresh-btn { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.5rem 1.2rem; cursor: pointer; border-radius: 2px; transition: opacity 0.2s; }
+  #show-done-btn, #export-btn, #refresh-btn, #reset-btn { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.5rem 1.2rem; cursor: pointer; border-radius: 2px; transition: opacity 0.2s; }
   #export-btn { background: transparent; color: var(--accent2); border: 1px solid var(--accent2); }
   #export-btn:hover { opacity: 0.75; }
   #refresh-btn { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
   #refresh-btn:hover { color: var(--text); border-color: var(--muted); }
+  #show-done-btn { background: transparent; color: var(--green); border: 1px solid var(--green); }
+  #show-done-btn:hover { opacity: 0.75; }
+  #reset-btn { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  #reset-btn:hover { opacity: 0.75; }
   #row-count { font-size: 0.65rem; color: var(--muted); margin-left: auto; }
   #table-wrap { padding: 1.5rem 2.5rem 3rem; overflow-x: auto; display: none; }
   table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
@@ -51,6 +59,8 @@
   tr.rank1:nth-child(even) td { background: var(--rank1-alt); }
   tr.rank2 td { background: var(--rank2-bg); }
   tr.rank2:nth-child(even) td { background: var(--rank2-alt); }
+  tr.completed td { background: var(--done-bg) !important; opacity: 0.5; }
+  tr.completed td .part-id { text-decoration: line-through; }
   tr:hover td { filter: brightness(1.2); }
   .badge { display: inline-block; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.6rem; padding: 2px 8px; border-radius: 2px; color: white; }
   .badge-1 { background: var(--accent); }
@@ -62,6 +72,41 @@
   .grade-C { color: #f0a040; }
   .grade-S { color: #e87040; }
   .grade-X { color: #e84040; font-weight: 700; }
+
+  /* Tick checkbox */
+  .tick-cell { text-align: center; width: 40px; }
+  .tick-box {
+    width: 18px; height: 18px; border-radius: 3px; border: 2px solid var(--border);
+    background: transparent; cursor: pointer; appearance: none; -webkit-appearance: none;
+    display: inline-block; vertical-align: middle; position: relative; transition: all 0.15s;
+  }
+  .tick-box:checked { background: var(--green); border-color: var(--green); }
+  .tick-box:checked::after { content: '✓'; position: absolute; color: white; font-size: 11px; font-weight: 700; top: -1px; left: 2px; }
+  .tick-box:hover { border-color: var(--green); }
+
+  /* Live indicator */
+  .live-dot { display: inline-block; width: 7px; height: 7px; background: var(--green); border-radius: 50%; margin-right: 5px; animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+  #live-status { font-size: 0.65rem; color: var(--green); display: none; margin-top: 2px; }
+
+
+  /* Zero qty section */
+  #zero-section { padding: 0 2.5rem 3rem; display: none; }
+  .zero-heading {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.7rem;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted);
+    border-top: 1px solid var(--border); padding-top: 1.5rem; margin-bottom: 1rem;
+    display: flex; align-items: center; gap: 0.75rem;
+  }
+  .zero-heading::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .zero-count { font-family: 'IBM Plex Mono', monospace; font-weight: 400; color: var(--border); font-size: 0.65rem; }
+  #zero-table { width: 100%; border-collapse: collapse; font-size: 0.68rem; opacity: 0.45; }
+  #zero-table td { padding: 0.35rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.02); white-space: nowrap; color: var(--muted); }
+  #zero-table tr:hover td { opacity: 0.7; }
+  #zero-table .part-id { font-weight: 500; color: var(--text); }
+  #zero-table .num-cell { text-align: center; }
+  .zero-badge { display: inline-block; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.55rem; padding: 1px 6px; border-radius: 2px; color: var(--muted); border: 1px solid var(--border); }
+
   @media print {
     body { background: white; color: black; }
     header, #stats-bar, #actions-bar { display: none !important; }
@@ -70,6 +115,8 @@
     th { color: #333 !important; background: #eee !important; }
     tr.rank1 td { background: #fce4d6 !important; }
     tr.rank2 td { background: #ddeeff !important; }
+    tr.completed { display: none; }
+    .tick-cell { display: none; }
   }
 </style>
 </head>
@@ -79,11 +126,12 @@
   <div class="logo-mark">DCD</div>
   <div>
     <h1>Priority Work List</h1>
-    <p>Auto-loads latest data from repository</p>
+    <p>Auto-loads latest data · Live completion tracking</p>
   </div>
   <div class="header-right">
     <div id="date-badge"></div>
     <div id="last-updated"></div>
+    <div id="live-status"><span class="live-dot"></span>Live sync active</div>
   </div>
 </header>
 
@@ -97,12 +145,15 @@
   <div class="stat"><span class="stat-label">Rank 1 — Backorder</span><span class="stat-value r1" id="stat-r1">—</span></div>
   <div class="stat"><span class="stat-label">Rank 2 — PowerBI</span><span class="stat-value r2" id="stat-r2">—</span></div>
   <div class="stat"><span class="stat-label">Total Parts</span><span class="stat-value" id="stat-total">—</span></div>
+  <div class="stat"><span class="stat-label">Completed Today</span><span class="stat-value done" id="stat-done">0</span></div>
 </div>
 
 <div id="actions-bar">
   <input id="search-input" type="search" placeholder="Search Part ID or team..." oninput="renderTable()"/>
+  <button id="show-done-btn" onclick="toggleDone()">Hide Completed</button>
   <button id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
   <button id="export-btn" onclick="exportXLSX()">Export to Excel</button>
+  <button id="reset-btn" onclick="resetTicks()">Reset All Ticks</button>
   <span id="row-count"></span>
 </div>
 
@@ -110,6 +161,7 @@
   <table>
     <thead>
       <tr>
+        <th class="tick-cell">Done</th>
         <th onclick="sortBy('Priority')">Priority <span>↕</span></th>
         <th onclick="sortBy('Part ID')">Part ID <span>↕</span></th>
         <th onclick="sortBy('Repair Team')">Team <span>↕</span></th>
@@ -124,15 +176,74 @@
   </table>
 </div>
 
+<div id="zero-section">
+  <div class="zero-heading">No Quantity <span class="zero-count" id="zero-count"></span></div>
+  <table id="zero-table">
+    <tbody id="zero-body"></tbody>
+  </table>
+</div>
+
 <script>
+// Firebase config
+const firebaseConfig = {
+  apiKey: "AIzaSyA0wFTrqPY_1F59il7Hx1aRYjY72gFUgAg",
+  authDomain: "dcd-priority-list.firebaseapp.com",
+  databaseURL: "https://dcd-priority-list-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "dcd-priority-list",
+  storageBucket: "dcd-priority-list.firebasestorage.app",
+  messagingSenderId: "546556468621",
+  appId: "1:546556468621:web:6dbf9628527d51170cb1c4"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
 const RAW = 'https://raw.githubusercontent.com/NotKamran07/dcd-priority-list/main';
 const GRADE_VALUE = { A: 0.10, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
-const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH", "ADP-BT-SPLIT-LIDL", "ADP-CCTV-RG59-BNC", "ADP-ISC-QMS", "AP-UNIFI-NANO-HD", "ASW-AP-CIS-MER-CW9162", "ASW-AP-CIS-MER-MR44", "ASW-CAB-WIN-BA92", "ASW-CAM-MOT-VB400V3", "ASW-CHG-DOCK-VB400", "ASW-CON-CASE-TC26", "ASW-CON-SCR-PROT-TC26", "ASW-DOCK-CON-DC200", "ASW-HHT-ZEB-TC22", "ASW-HHT-ZEB-TC27", "ASW-HHT-ZEBRA-TC26", "ASW-IPAD-GEN9-64GB", "ASW-IPAD-RUGGED-CASE", "ASW-PHONE-YEALINK-W73P", "ASW-SCN-DAT-QD2450", "ASW-SCN-MAG-1500I", "ASW-SCN-NLSHR3280-PHM", "ASW-ZEB-TC52-HHT", "ASW-ZEB-TC52-HHT-DC", "ATM-32-LGT-BD-MK2", "ATM-32-REAR-FAN", "ATT-WAIT-LOCK-BA83", "BEA-PSU-VER-VX680", "BG-SCN-OXH-BC361", "BOA-SCN-DAT-3200VSI", "BOA-SCN-DAT-3300HSI", "CAB-CBNA-UO1-S07ZA", "CAB-DAT-EAS", "CAB-DIGI-CAB65200", "CAB-DPORT-DPORT", "CAB-HHP-XEN-1900-USB", "CAB-HON-1450G", "CAB-HON-7120-USB", "CAB-HR2260-USB", "CAB-MET-STD-RS232", "CAB-MOT-U21-S07ZAR", "CAB-SCN-9800-12V-USB", "CAB-SCN-DATA-RS232", "CAB-SCN-MAG-1500I", "CAB-SYM-25-32469-20", "CAB-SYM-DS4208", "CAB-SYM-STI85-0200", "CAM-BOBA-CAM-GRY", "CAM-BOBA-CAMERA", "CAM-BOBA-SENSOR", "CC-SCN-ZEB-DS2208", "CCTV-PSU-24V", "CDR-ANK-08512-INSERT", "CDR-DIG-EC410-INSERT", "CDR-FT-EUMOD460-INS", "CDR-FT-MOD460-INSERT", "CDR-J2-INSERT", "CDR-MAT-EP107-INSERT", "CDR-MSC5099-INSERT", "CDR-SL2000-INSERT", "CDR-STD2000-INSERT", "CDR-TEC-51A-INSERT", "CEC-CAB-521-USB-BLK", "CEC-CAB-PWR-KET-STD", "CEC-CRA-HHT-5SLOT-TC51", "CEC-CRA-HHT-ZEB-TC51", "CEC-HHT-ZEB-TC51", "CEC-PSU-KRO-TIME-CLO", "CEC-PSU-M900-65W", "CEC-PSU-M900-90W", "CEC-PSU-VER-P400", "CEC-PTR-AVERY-9417", "CEC-PTR-AVERY-9418", "CEC-PTR-PAXAR-9486", "CEC-SCN-STAND", "CEC-STD-FP-READER", "CEC-TAB-ZEB-ET40-10IN", "CLK-IPAD-10-64GB", "CLK-IPHONE-14-128GB", "CLK-PHONE-YL-W56H", "CLK-PSU-APG-CDR", "CLK-PSU-CIS-MX68", "CLK-PSU-PS170", "CON-CDR-3S-423-INS", "CON-MO-USB-BLK", "CON-PC-EPS-IM700-SCR", "CON-POLE-YUNO-CW", "CON-SPACE-2POLE", "CON-VER-P400-MGRP-BLK", "COS-CAB-DS457-USB", "COS-CAB-DS9208-USB", "COS-CAB-USB-A-MINI-B", "COS-CDR-C4141B-INSERT", "COS-CON-BAT-T470", "COS-MSR-MS-GO2", "COS-PLT-DS9208", "COS-PSU-MIC-GO", "COS-PSU-MS-SURFACE-PRO", "COS-PSU-VX820-9V", "COS-SCN-BC361-USB", "COS-SCN-DAT-4400", "COS-SCN-DS457-USB", "COS-SCN-DS9208-USB", "COS-SCN-NWL-USB", "COS-TAB-CASE-MS-GO2", "COS-TAB-EASEL-GO2", "COS-TAB-MIC-COMPLIANCE", "COS-TAB-PCLIP", "COS-TAB-SCR-PROT", "COS-TAB-SHLD-STRP", "COS-TAB-TYP-COVER", "COS-TAB-UAG-COVER", "CRA-SYM-MC3000-USB", "CRA-TOSH-TEC-EP800", "CRA-VOC-CR-RK-S5", "CRA-VOC-S5-REG", "CRA-VOC-S5-STD", "CRA-ZEB-TC57-LID", "CRA-ZEB-TC58-LID", "FH-AP-MER-MR33", "HBS-SCN-HON-1450G", "HOB-CRA-CAS-S1F2-BASE", "HOB-PSU-VER-V400M", "HSM-POS-SCANNER", "HTS-DS-ALL-WS37HD8", "HTS-DS-AND-PPCNET-D", "HTS-SCN-HON-BO", "HTS-SCN-HON-POS", "HWS-ITSU-240-PED-PSU", "HWS-ITSU-FLY-MON-PSU", "HWS-KBD-MOU-WIRELESS", "HWS-PZH-12V-150W-12.5A-PSU", "HWS-PZH-12V-7AMP-CLO22-PSU", "HWS-PZH-AP-DRAY-1060", "HWS-PZH-AP-DRAY-912C", "HWS-PZH-CAB-EURO-ELKTX", "HWS-PZH-CHRM-BK-N23-PSU", "HWS-PZH-PSU-LEN", "KBD-ACC-5010", "KBD-ACC-596-MINI", "KBD-ACC-KYB500-K82B", "KBD-ACK-540RF", "KBD-AKE-OCU-741", "KBD-CHY-GB81-MY700", "KBD-CHY-SPOS-G86-624", "KBD-HP-FK218AA", "KBD-KEY-ACK-340-PS2", "KBD-MOU-HP-230", "KBD-MOU-HP-235", "KBD-PS2-MINI-BLK", "KBD-USB-BLK", "KBD-USB-MINI-BLK", "KBD-USB-MINI-CRM", "LIB-SCN-HON-XEN-1950", "LID-ADP-ISC-QMS", "LID-CIS-ATA-192", "LID-CRA-DESK-UTMB5", "LID-CRA-PAN-UTMB5", "LID-FREDERIX-HOTSPOT", "LID-PAN-MNT-UTMB5", "LID-SMC-ISC-V2.1", "LID-SU-AP-HUA-5760-51", "LID-TAB-PAN-UTMB5", "LYD-AAH-PAP-BRO-HL6400DW", "LYD-AAH-TRAY-BRO-LT6505", "LYD-E-CAB-U21-S07ZAR", "LYD-E-CDU-HP-LD220", "LYD-E-CRA-8800-HHT", "LYD-E-CRA-SYM-MC3190", "LYD-E-KBD-ACK-540U", "LYD-E-PSU-8800-HHT", "LYD-E-SCN-MOT-DS9208", "MCD-BAT-QUA-PRO9", "MCD-BSE-NEX-7000-KIT", "MCD-BSE-QUA-DT", "MCD-BSE-QUA-DUAL-V2", "MCD-CAB-PWR-SPLIT-DTSV2", "MCD-CASE-NEX-7007", "MCD-DOCK-QUA-8PORT", "MCD-DT-AU-3M-BSE-5.20X2-KIT", "MCD-DT-AU-3M-BSE-526-KIT", "MCD-DT-AU-3M-BSE-KIT", "MCD-DT-AU-3M-BSE-KIT-HS", "MCD-DT-AU-3M-PAR-G5SPK-KIT", "MCD-DT-AU-3M-SPK-MIC-KIT", "MCD-DT-AU-3M-VENBSE-KIT", "MCD-DT-AU-HME-BAT-KIT", "MCD-DT-AU-HME-BSE6200-KIT", "MCD-DT-AU-HME-MIC-KIT", "MCD-DT-AU-HME-PCB-6200", "MCD-DT-AU-HME-SPK-KIT", "MCD-DT-AU-PAR-G5PLUS-KIT", "MCD-DT-AU-PCB-LOOPCARD", "MCD-DT-GATEWAY-DX80-KIT", "MCD-DT-PUCK-DX80-KIT", "MCD-DT-QUAIL-EXTBOX", "MCD-DT-RGAGE-RADR-KIT", "MCD-DT-SOTEC-CLOUD-KIT", "MCD-HDSET-3M-KIT", "MCD-HEAD-3M-12SLOT-CHARGER", "MCD-HEAD-3M-CHARGER", "MCD-HME-FOAM", "MCD-HSET-QUA", "MCD-KIT-HSET-HS6200", "MCD-KIT-NEX-HSET-7002", "MCD-KSK-EURO-SCN-MX101-KIT", "MCD-KSK-EVOK-SCANCASE-KIT", "MCD-KSK-EVOK-SCN-4400-KIT", "MCD-KSK-NGK-SCN-N5680-KIT", "MCD-MIC-QUA", "MCD-NEX-BAT-DOCK", "MCD-PUCK-DHOUS-KIT", "MCD-PUCK-DTSV2-KIT", "MCD-RADR-DTSV2-KIT", "MCD-RPTR-QUA", "MCD-SCN-ACR-NGK27-KIT", "MCD-SCN-DS547-4407-3207", "MCD-SCN-ZEB-MD27-KIT", "MCD-SPK-NEX-7000", "MCD-SPK-QUA", "MCD-TRANS-NEX-7000", "MED-INTEL-STICK", "MNT-DBLD-SCO", "MOD-DYNALINK-56K-PCI", "MW-SCN-HP-6Y2V4AA", "NAN-DS-HKV-DS-D60C-B", "NAN-DS-INT-STK1AW32SC", "NHS-SCN-DAT-QD2430", "NT-BAT-DELL-LAT-5175", "NT-BAT-DELL-VEN11", "NT-BAT-R11-DUR", "NT-DOCK-DELL", "NT-DOCK-DURABOOK-R11", "NT-DURABOOK-PSU", "NT-PSU-DELL-DOCK", "NT-PSU-PS-180", "NWK-VOC-BSE-STN", "NXT-CAB-HON-7580G-USB", "NXT-CRA-HON-1902H", "NXT-SCN-HON-1902", "NXT-SCN-HON-USB-7580G", "NXT-SCN-ZEB-RFD8500", "ODE-BAT-APC-SMX3000", "ODE-CAB-LED-10SQ", "ODE-DOCK-HDD-TS-231P", "ODE-DOCK-QN-TS431XEU", "OFC-SCN-CIP-1100", "OFC-SCN-DAT-HD3130", "OST-BAT-ZEB-TC52-PKR", "OST-CDR-INSERT-DGRY", "OST-CRA-HHT-ZEB-TC51", "OST-CRA-ZEB-TC52-HHT", "OST-CRA-ZEB-TC52-PKR", "OST-CRA-ZEB-TC53E", "OST-HHT-ZEB-TC51", "OST-HHT-ZEB-TC52", "OST-HHT-ZEB-TC52-PKR", "OST-HHT-ZEB-TC53E", "OST-HHT-ZEB-TC77-WH", "OST-PSU-CRA-HHT", "OST-PTR-HP-TRAY2", "OST-SCN-ZEB-RS5000X-WH", "OST-TAB-ZEB-WT6400-WH", "PAD-BPS-GAS-STRUT", "PAD-BPS-SWITCH-DOOR", "PAD-NV200-NOTE-READER-BPS", "PAD-PHONE-YEALINK-W53P", "PAD-SCN-GEWE-FM3080", "PAD-SCN-HON-MS9520", "PAD-SCN-NLS-FM100", "PAD-SCN-NLS-FM3051", "PAD-SCN-NLS-FM3080", "PH8-SCN-MOT-DS9208", "PHONE-BT-DUET-210", "PLP-HON-SCN-HF561SR", "PS-USA-POS-SCAN-BDL", "RI-CAB-SCN-DS8108", "RI-SCN-ZEB-DS8108", "RI-SCO-ELO-SCANNER2D", "RI-SCO-KEONN-ADVANGO", "RI-SCO-KEONN-ADVANPAY-120", "SCN-CAN-LIDE110", "SCN-DAT-3300-MUL", "SCN-DAT-GFS4400", "SCN-DAT-MAG-8001", "SCN-DATA-3450VSI", "SCN-DOC-CAN-LIDE300", "SCN-DOR-HR2260-HOLDER", "SCN-DORA-HR2300-2D", "SCN-DORADA-HR2260-2D", "SCN-HHP-1300G", "SCN-HHP-3800G04E", "SCN-HHP-XEN-1900-USB", "SCN-HON-MS9540-USB", "SCN-HP-1RL97AA", "SCN-HP-BW868AA", "SCN-HP-BW868AA-STND", "SCN-HP-ENG-1-STND", "SCN-MAG-1500I-BLK", "SCN-MAG-M1500-I", "SCN-MET-3780-USB-BLK", "SCN-MET-7120-RS2-BLK", "SCN-MET-7120-USB-BLK", "SCN-MET-9520-KBW-BLK", "SCN-MET-9520-KBW-CRM", "SCN-MET-9520-USB-BLK", "SCN-MET-9520-USB-CRM", "SCN-MET-9540-USB-BLK", "SCN-MET-QUANTUM-USB", "SCN-MOT-DS4308-USB", "SCN-MOT-DS457-USB", "SCN-MOT-DS9208-USB", "SCN-QUANTUM-STAND", "SCN-SU-SYM-LS9208-LON", "SCN-SYM-DS4208", "SCN-SYM-LS9100-400BC", "SCN-SYM-LS9208-LON", "SCN-UNI-MS320-1G", "SCN-ZEB-DS9208-BLK", "SCN-ZEB-DS9308-USB", "SDR-SCN-ZEB-RFD8500", "SDR-TAB-IPHONE-SE", "SDR-TAB-IPOD-TCH", "SDR-ZEB-CHG-CRA", "SDY-SCN-RFID", "SEL-CAB-CRA-M-INT433", "SEL-CRA-DAT-M-INT433", "SEL-SCN-DAT-PM9500", "SEL-SCN-DAT-PM9501", "SEL-SCN-DS4208-USB", "SEL-SCN-MET-9540-USB", "SHO-SCN-DS9208-USB", "SIG-CRA-VX680", "SPK-VOC-HDSET-S5", "SUP-CAB-NLSHR22-USB", "SUP-HHT-ZEBRA-TC26-PSL", "SUP-SCN-HHT-ZEB-TC51", "SUP-SU-SCN-DS9208-EAS", "SVR-VOC-CTRLR", "THR-BAT-SYM-CS4070", "THR-CAB-IPAD-CHARGE-BLK", "THR-CAB-SYM-CS4070", "THR-CAB-ZEB-CS4070", "THR-CON-CS4070-LANYARD", "THR-DOCK-CHARGE-6080", "THR-DOCK-CHARGE-CS4070", "THR-DOCK-CHG-CUP-6080", "THR-IPAD-AIR-4TH", "THR-IPAD-RUGGED-CASE", "THR-SCN-SYM-CS4070", "THR-SCN-ZEB-CS6080", "TPRG-SCN-DS2208-SR", "TPS-CAB-SCN-DS9308", "TPS-CRA-TC51", "TPS-SCN-DS9208-SR2D", "TPS-SCN-ZEB-DS9308", "TRG-BAT-ZEB-HHT", "TRG-CASE-SAM-A8-10.5IN", "TRG-CRA-SYM-MC40-5SLOT", "TRG-CRA-VX680", "TRG-CRA-ZEB-BAT-4SLOT", "TRG-CRA-ZEB-HHT-BAT-4SLOT", "TRG-CRA-ZEB-TC52-5SLOT", "TRG-HHT-ZEB-TC22", "TRG-HHT-ZEB-TC52", "TRG-MON-HP-E22-G5-22IN", "TRG-PHONE-BT-DECT", "TRG-SCN-SYM-DS9208", "TRG-SCN-ZEB-DS9308", "TRG-TAB-IPAD-MINI-A2124", "TRG-TAB-IPAD-MINI-A2133", "TRG-TAB-IPAD-MINI-A2567", "TRG-TAB-IPAD-MINI-A2993", "TRG-TAB-IPAD-MINI2", "TRG-TAB-IPAD7-A2197", "TRG-TAB-IPAD9-A2602", "TRG-TAB-IPOD-TCH-6GEN", "TRG-TAB-SAM-A8", "TRG-TAB-SAM-A9-PLUS-64", "TUI-LAP-DELL-WD19-DOCK", "WHI-SCN-SYM-DS9208-USB", "WHIT-MNT-TAB-DFWC-KIT", "WHIT-SCN-WINCOR", "WHIT-TAB-CSE-LEN-M10", "WHIT-TAB-LEN-M10", "YC-SCN-DS9208", "YC-SCN-ZEB-DS9308"]);
+const TODAY = new Date().toISOString().slice(0, 10);
+const TICKS_REF = db.ref(`ticks/${TODAY}`);
 
-let outputRows = [], sortCol = null, sortAsc = true;
+const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG59-BNC","ADP-ISC-QMS","AP-UNIFI-NANO-HD","ASW-AP-CIS-MER-CW9162","ASW-AP-CIS-MER-MR44","ASW-CAB-WIN-BA92","ASW-CAM-MOT-VB400V3","ASW-CHG-DOCK-VB400","ASW-CON-CASE-TC26","ASW-CON-SCR-PROT-TC26","ASW-DOCK-CON-DC200","ASW-HHT-ZEB-TC22","ASW-HHT-ZEB-TC27","ASW-HHT-ZEBRA-TC26","ASW-IPAD-GEN9-64GB","ASW-IPAD-RUGGED-CASE","ASW-PHONE-YEALINK-W73P","ASW-SCN-DAT-QD2450","ASW-SCN-MAG-1500I","ASW-SCN-NLSHR3280-PHM","ASW-ZEB-TC52-HHT","ASW-ZEB-TC52-HHT-DC","ATM-32-LGT-BD-MK2","ATM-32-REAR-FAN","ATT-WAIT-LOCK-BA83","BEA-PSU-VER-VX680","BG-SCN-OXH-BC361","BOA-SCN-DAT-3200VSI","BOA-SCN-DAT-3300HSI","CAB-CBNA-UO1-S07ZA","CAB-DAT-EAS","CAB-DIGI-CAB65200","CAB-DPORT-DPORT","CAB-HHP-XEN-1900-USB","CAB-HON-1450G","CAB-HON-7120-USB","CAB-HR2260-USB","CAB-MET-STD-RS232","CAB-MOT-U21-S07ZAR","CAB-SCN-9800-12V-USB","CAB-SCN-DATA-RS232","CAB-SCN-MAG-1500I","CAB-SYM-25-32469-20","CAB-SYM-DS4208","CAB-SYM-STI85-0200","CAM-BOBA-CAM-GRY","CAM-BOBA-CAMERA","CAM-BOBA-SENSOR","CC-SCN-ZEB-DS2208","CCTV-PSU-24V","CDR-ANK-08512-INSERT","CDR-DIG-EC410-INSERT","CDR-FT-EUMOD460-INS","CDR-FT-MOD460-INSERT","CDR-J2-INSERT","CDR-MAT-EP107-INSERT","CDR-MSC5099-INSERT","CDR-SL2000-INSERT","CDR-STD2000-INSERT","CDR-TEC-51A-INSERT","CEC-CAB-521-USB-BLK","CEC-CAB-PWR-KET-STD","CEC-CRA-HHT-5SLOT-TC51","CEC-CRA-HHT-ZEB-TC51","CEC-HHT-ZEB-TC51","CEC-PSU-KRO-TIME-CLO","CEC-PSU-M900-65W","CEC-PSU-M900-90W","CEC-PSU-VER-P400","CEC-PTR-AVERY-9417","CEC-PTR-AVERY-9418","CEC-PTR-PAXAR-9486","CEC-SCN-STAND","CEC-STD-FP-READER","CEC-TAB-ZEB-ET40-10IN","CLK-IPAD-10-64GB","CLK-IPHONE-14-128GB","CLK-PHONE-YL-W56H","CLK-PSU-APG-CDR","CLK-PSU-CIS-MX68","CLK-PSU-PS170","CON-CDR-3S-423-INS","CON-MO-USB-BLK","CON-PC-EPS-IM700-SCR","CON-POLE-YUNO-CW","CON-SPACE-2POLE","CON-VER-P400-MGRP-BLK","COS-CAB-DS457-USB","COS-CAB-DS9208-USB","COS-CAB-USB-A-MINI-B","COS-CDR-C4141B-INSERT","COS-CON-BAT-T470","COS-MSR-MS-GO2","COS-PLT-DS9208","COS-PSU-MIC-GO","COS-PSU-MS-SURFACE-PRO","COS-PSU-VX820-9V","COS-SCN-BC361-USB","COS-SCN-DAT-4400","COS-SCN-DS457-USB","COS-SCN-DS9208-USB","COS-SCN-NWL-USB","COS-TAB-CASE-MS-GO2","COS-TAB-EASEL-GO2","COS-TAB-MIC-COMPLIANCE","COS-TAB-PCLIP","COS-TAB-SCR-PROT","COS-TAB-SHLD-STRP","COS-TAB-TYP-COVER","COS-TAB-UAG-COVER","CRA-SYM-MC3000-USB","CRA-TOSH-TEC-EP800","CRA-VOC-CR-RK-S5","CRA-VOC-S5-REG","CRA-VOC-S5-STD","CRA-ZEB-TC57-LID","CRA-ZEB-TC58-LID","FH-AP-MER-MR33","HBS-SCN-HON-1450G","HOB-CRA-CAS-S1F2-BASE","HOB-PSU-VER-V400M","HSM-POS-SCANNER","HTS-DS-ALL-WS37HD8","HTS-DS-AND-PPCNET-D","HTS-SCN-HON-BO","HTS-SCN-HON-POS","HWS-ITSU-240-PED-PSU","HWS-ITSU-FLY-MON-PSU","HWS-KBD-MOU-WIRELESS","HWS-PZH-12V-150W-12.5A-PSU","HWS-PZH-12V-7AMP-CLO22-PSU","HWS-PZH-AP-DRAY-1060","HWS-PZH-AP-DRAY-912C","HWS-PZH-CAB-EURO-ELKTX","HWS-PZH-CHRM-BK-N23-PSU","HWS-PZH-PSU-LEN","KBD-ACC-5010","KBD-ACC-596-MINI","KBD-ACC-KYB500-K82B","KBD-ACK-540RF","KBD-AKE-OCU-741","KBD-CHY-GB81-MY700","KBD-CHY-SPOS-G86-624","KBD-HP-FK218AA","KBD-KEY-ACK-340-PS2","KBD-MOU-HP-230","KBD-MOU-HP-235","KBD-PS2-MINI-BLK","KBD-USB-BLK","KBD-USB-MINI-BLK","KBD-USB-MINI-CRM","LIB-SCN-HON-XEN-1950","LID-ADP-ISC-QMS","LID-CIS-ATA-192","LID-CRA-DESK-UTMB5","LID-CRA-PAN-UTMB5","LID-FREDERIX-HOTSPOT","LID-PAN-MNT-UTMB5","LID-SMC-ISC-V2.1","LID-SU-AP-HUA-5760-51","LID-TAB-PAN-UTMB5","LYD-AAH-PAP-BRO-HL6400DW","LYD-AAH-TRAY-BRO-LT6505","LYD-E-CAB-U21-S07ZAR","LYD-E-CDU-HP-LD220","LYD-E-CRA-8800-HHT","LYD-E-CRA-SYM-MC3190","LYD-E-KBD-ACK-540U","LYD-E-PSU-8800-HHT","LYD-E-SCN-MOT-DS9208","MCD-BAT-QUA-PRO9","MCD-BSE-NEX-7000-KIT","MCD-BSE-QUA-DT","MCD-BSE-QUA-DUAL-V2","MCD-CAB-PWR-SPLIT-DTSV2","MCD-CASE-NEX-7007","MCD-DOCK-QUA-8PORT","MCD-DT-AU-3M-BSE-5.20X2-KIT","MCD-DT-AU-3M-BSE-526-KIT","MCD-DT-AU-3M-BSE-KIT","MCD-DT-AU-3M-BSE-KIT-HS","MCD-DT-AU-3M-PAR-G5SPK-KIT","MCD-DT-AU-3M-SPK-MIC-KIT","MCD-DT-AU-3M-VENBSE-KIT","MCD-DT-AU-HME-BAT-KIT","MCD-DT-AU-HME-BSE6200-KIT","MCD-DT-AU-HME-MIC-KIT","MCD-DT-AU-HME-PCB-6200","MCD-DT-AU-HME-SPK-KIT","MCD-DT-AU-PAR-G5PLUS-KIT","MCD-DT-AU-PCB-LOOPCARD","MCD-DT-GATEWAY-DX80-KIT","MCD-DT-PUCK-DX80-KIT","MCD-DT-QUAIL-EXTBOX","MCD-DT-RGAGE-RADR-KIT","MCD-DT-SOTEC-CLOUD-KIT","MCD-HDSET-3M-KIT","MCD-HEAD-3M-12SLOT-CHARGER","MCD-HEAD-3M-CHARGER","MCD-HME-FOAM","MCD-HSET-QUA","MCD-KIT-HSET-HS6200","MCD-KIT-NEX-HSET-7002","MCD-KSK-EURO-SCN-MX101-KIT","MCD-KSK-EVOK-SCANCASE-KIT","MCD-KSK-EVOK-SCN-4400-KIT","MCD-KSK-NGK-SCN-N5680-KIT","MCD-MIC-QUA","MCD-NEX-BAT-DOCK","MCD-PUCK-DHOUS-KIT","MCD-PUCK-DTSV2-KIT","MCD-RADR-DTSV2-KIT","MCD-RPTR-QUA","MCD-SCN-ACR-NGK27-KIT","MCD-SCN-DS547-4407-3207","MCD-SCN-ZEB-MD27-KIT","MCD-SPK-NEX-7000","MCD-SPK-QUA","MCD-TRANS-NEX-7000","MED-INTEL-STICK","MNT-DBLD-SCO","MOD-DYNALINK-56K-PCI","MW-SCN-HP-6Y2V4AA","NAN-DS-HKV-DS-D60C-B","NAN-DS-INT-STK1AW32SC","NHS-SCN-DAT-QD2430","NT-BAT-DELL-LAT-5175","NT-BAT-DELL-VEN11","NT-BAT-R11-DUR","NT-DOCK-DELL","NT-DOCK-DURABOOK-R11","NT-DURABOOK-PSU","NT-PSU-DELL-DOCK","NT-PSU-PS-180","NWK-VOC-BSE-STN","NXT-CAB-HON-7580G-USB","NXT-CRA-HON-1902H","NXT-SCN-HON-1902","NXT-SCN-HON-USB-7580G","NXT-SCN-ZEB-RFD8500","ODE-BAT-APC-SMX3000","ODE-CAB-LED-10SQ","ODE-DOCK-HDD-TS-231P","ODE-DOCK-QN-TS431XEU","OFC-SCN-CIP-1100","OFC-SCN-DAT-HD3130","OST-BAT-ZEB-TC52-PKR","OST-CDR-INSERT-DGRY","OST-CRA-HHT-ZEB-TC51","OST-CRA-ZEB-TC52-HHT","OST-CRA-ZEB-TC52-PKR","OST-CRA-ZEB-TC53E","OST-HHT-ZEB-TC51","OST-HHT-ZEB-TC52","OST-HHT-ZEB-TC52-PKR","OST-HHT-ZEB-TC53E","OST-HHT-ZEB-TC77-WH","OST-PSU-CRA-HHT","OST-PTR-HP-TRAY2","OST-SCN-ZEB-RS5000X-WH","OST-TAB-ZEB-WT6400-WH","PAD-BPS-GAS-STRUT","PAD-BPS-SWITCH-DOOR","PAD-NV200-NOTE-READER-BPS","PAD-PHONE-YEALINK-W53P","PAD-SCN-GEWE-FM3080","PAD-SCN-HON-MS9520","PAD-SCN-NLS-FM100","PAD-SCN-NLS-FM3051","PAD-SCN-NLS-FM3080","PH8-SCN-MOT-DS9208","PHONE-BT-DUET-210","PLP-HON-SCN-HF561SR","PS-USA-POS-SCAN-BDL","RI-CAB-SCN-DS8108","RI-SCN-ZEB-DS8108","RI-SCO-ELO-SCANNER2D","RI-SCO-KEONN-ADVANGO","RI-SCO-KEONN-ADVANPAY-120","SCN-CAN-LIDE110","SCN-DAT-3300-MUL","SCN-DAT-GFS4400","SCN-DAT-MAG-8001","SCN-DATA-3450VSI","SCN-DOC-CAN-LIDE300","SCN-DOR-HR2260-HOLDER","SCN-DORA-HR2300-2D","SCN-DORADA-HR2260-2D","SCN-HHP-1300G","SCN-HHP-3800G04E","SCN-HHP-XEN-1900-USB","SCN-HON-MS9540-USB","SCN-HP-1RL97AA","SCN-HP-BW868AA","SCN-HP-BW868AA-STND","SCN-HP-ENG-1-STND","SCN-MAG-1500I-BLK","SCN-MAG-M1500-I","SCN-MET-3780-USB-BLK","SCN-MET-7120-RS2-BLK","SCN-MET-7120-USB-BLK","SCN-MET-9520-KBW-BLK","SCN-MET-9520-KBW-CRM","SCN-MET-9520-USB-BLK","SCN-MET-9520-USB-CRM","SCN-MET-9540-USB-BLK","SCN-MET-QUANTUM-USB","SCN-MOT-DS4308-USB","SCN-MOT-DS457-USB","SCN-MOT-DS9208-USB","SCN-QUANTUM-STAND","SCN-SU-SYM-LS9208-LON","SCN-SYM-DS4208","SCN-SYM-LS9100-400BC","SCN-SYM-LS9208-LON","SCN-UNI-MS320-1G","SCN-ZEB-DS9208-BLK","SCN-ZEB-DS9308-USB","SDR-SCN-ZEB-RFD8500","SDR-TAB-IPHONE-SE","SDR-TAB-IPOD-TCH","SDR-ZEB-CHG-CRA","SDY-SCN-RFID","SEL-CAB-CRA-M-INT433","SEL-CRA-DAT-M-INT433","SEL-SCN-DAT-PM9500","SEL-SCN-DAT-PM9501","SEL-SCN-DS4208-USB","SEL-SCN-MET-9540-USB","SHO-SCN-DS9208-USB","SIG-CRA-VX680","SPK-VOC-HDSET-S5","SUP-CAB-NLSHR22-USB","SUP-HHT-ZEBRA-TC26-PSL","SUP-SCN-HHT-ZEB-TC51","SUP-SU-SCN-DS9208-EAS","SVR-VOC-CTRLR","THR-BAT-SYM-CS4070","THR-CAB-IPAD-CHARGE-BLK","THR-CAB-SYM-CS4070","THR-CAB-ZEB-CS4070","THR-CON-CS4070-LANYARD","THR-DOCK-CHARGE-6080","THR-DOCK-CHARGE-CS4070","THR-DOCK-CHG-CUP-6080","THR-IPAD-AIR-4TH","THR-IPAD-RUGGED-CASE","THR-SCN-SYM-CS4070","THR-SCN-ZEB-CS6080","TPRG-SCN-DS2208-SR","TPS-CAB-SCN-DS9308","TPS-CRA-TC51","TPS-SCN-DS9208-SR2D","TPS-SCN-ZEB-DS9308","TRG-BAT-ZEB-HHT","TRG-CASE-SAM-A8-10.5IN","TRG-CRA-SYM-MC40-5SLOT","TRG-CRA-VX680","TRG-CRA-ZEB-BAT-4SLOT","TRG-CRA-ZEB-HHT-BAT-4SLOT","TRG-CRA-ZEB-TC52-5SLOT","TRG-HHT-ZEB-TC22","TRG-HHT-ZEB-TC52","TRG-MON-HP-E22-G5-22IN","TRG-PHONE-BT-DECT","TRG-SCN-SYM-DS9208","TRG-SCN-ZEB-DS9308","TRG-TAB-IPAD-MINI-A2124","TRG-TAB-IPAD-MINI-A2133","TRG-TAB-IPAD-MINI-A2567","TRG-TAB-IPAD-MINI-A2993","TRG-TAB-IPAD-MINI2","TRG-TAB-IPAD7-A2197","TRG-TAB-IPAD9-A2602","TRG-TAB-IPOD-TCH-6GEN","TRG-TAB-SAM-A8","TRG-TAB-SAM-A9-PLUS-64","TUI-LAP-DELL-WD19-DOCK","WHI-SCN-SYM-DS9208-USB","WHIT-MNT-TAB-DFWC-KIT","WHIT-SCN-WINCOR","WHIT-TAB-CSE-LEN-M10","WHIT-TAB-LEN-M10","YC-SCN-DS9208","YC-SCN-ZEB-DS9308"]);
+
+let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, showDone = true;
 
 document.getElementById('date-badge').textContent =
   new Date().toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
+// Listen to Firebase ticks in real time
+TICKS_REF.on('value', snap => {
+  ticks = snap.val() || {};
+  updateDoneCount();
+  renderTable();
+});
+
+function safeKey(partId) {
+  return partId.replace(/[.#$\[\]]/g, '_');
+}
+
+function toggleTick(partId) {
+  const key = safeKey(partId);
+  if (ticks[key]) {
+    TICKS_REF.child(key).remove();
+  } else {
+    TICKS_REF.child(key).set(true);
+  }
+}
+
+function updateDoneCount() {
+  document.getElementById('stat-done').textContent = Object.keys(ticks).length;
+}
+
+function toggleDone() {
+  showDone = !showDone;
+  document.getElementById('show-done-btn').textContent = showDone ? 'Hide Completed' : 'Show Completed';
+  renderTable();
+}
+
+function resetTicks() {
+  if (confirm('Reset all ticks for today? This will clear completed items for everyone.')) {
+    TICKS_REF.remove();
+  }
+}
 
 async function fetchFile(filename) {
   const url = `${RAW}/${encodeURIComponent(filename)}`;
@@ -186,7 +297,6 @@ async function loadAll() {
 
     document.getElementById('loading-msg').textContent = 'Building priority list...';
 
-    // Grading map
     const gradeMap = {};
     gradingRows.forEach(r => {
       const id = (r['Part ID'] || r['part_id'] || '').toString().trim();
@@ -194,7 +304,6 @@ async function loadAll() {
       if (id && cls) gradeMap[id] = cls;
     });
 
-    // PowerBI map
     const pbiMap = {};
     pbiRows.forEach(r => {
       const id = (r['Part ID'] || '').toString().trim();
@@ -202,7 +311,6 @@ async function loadAll() {
       pbiMap[id] = { repReq: Number(r['Rep Req']) || 0, totalBad: Number(r['Total Bad']) || 0, team: (r['Repair Team'] || '').toString().trim() };
     });
 
-    // Backorder map
     const boMap = {};
     boRows.forEach(r => {
       const id = (r['Part ID'] || '').toString().trim();
@@ -242,6 +350,7 @@ async function loadAll() {
     document.getElementById('table-wrap').style.display = 'block';
     document.getElementById('last-updated').style.display = 'block';
     document.getElementById('last-updated').textContent = 'Loaded at ' + new Date().toLocaleTimeString('en-GB');
+    document.getElementById('live-status').style.display = 'block';
     sortCol = null;
     renderTable();
   } catch(err) {
@@ -253,7 +362,11 @@ async function loadAll() {
 
 function renderTable() {
   const search = document.getElementById('search-input').value.toLowerCase();
-  let rows = outputRows.filter(r => !search || r['Part ID'].toLowerCase().includes(search) || (r['Repair Team']||'').toLowerCase().includes(search));
+  let rows = outputRows.filter(r => {
+    if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
+    if (!showDone && ticks[safeKey(r['Part ID'])]) return false;
+    return !search || r['Part ID'].toLowerCase().includes(search) || (r['Repair Team'] || '').toLowerCase().includes(search);
+  });
   if (sortCol) {
     rows = [...rows].sort((a, b) => {
       let av = a[sortCol], bv = b[sortCol];
@@ -267,12 +380,15 @@ function renderTable() {
   tbody.innerHTML = '';
   rows.forEach(row => {
     const tr = document.createElement('tr');
-    tr.className = row.Priority === 1 ? 'rank1' : 'rank2';
+    const isDone = !!ticks[safeKey(row['Part ID'])];
+    tr.className = isDone ? 'completed' : (row.Priority === 1 ? 'rank1' : 'rank2');
     const cls = row['Part Class'] || '';
     const valStr = typeof row.Value === 'number' ? `£${row.Value.toFixed(2)}` : '';
+    const partId = row['Part ID'];
     tr.innerHTML = `
+      <td class="tick-cell"><input type="checkbox" class="tick-box" ${isDone ? 'checked' : ''} onchange="toggleTick('${partId}')"/></td>
       <td><span class="badge badge-${row.Priority}">${row.Priority}</span></td>
-      <td class="part-id">${row['Part ID']}</td>
+      <td class="part-id">${partId}</td>
       <td>${row['Repair Team'] || ''}</td>
       <td class="num-cell">${row['Rep Req'] !== '' ? row['Rep Req'] : ''}</td>
       <td class="num-cell">${row['Open Orders'] !== '' ? row['Open Orders'] : ''}</td>
@@ -282,6 +398,32 @@ function renderTable() {
     tbody.appendChild(tr);
   });
   document.getElementById('row-count').textContent = `${rows.length} parts shown`;
+
+  // Zero qty section
+  const zeroRows = outputRows.filter(r => (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') && !ticks[safeKey(r['Part ID'])]);
+  const zeroSection = document.getElementById('zero-section');
+  const zeroBody = document.getElementById('zero-body');
+  document.getElementById('zero-count').textContent = `(${zeroRows.length})`;
+  zeroBody.innerHTML = '';
+  if (zeroRows.length > 0 && outputRows.length > 0) {
+    zeroSection.style.display = 'block';
+    zeroRows.forEach(row => {
+      const tr = document.createElement('tr');
+      const cls = row['Part Class'] || '';
+      const valStr = typeof row.Value === 'number' ? `£${row.Value.toFixed(2)}` : '';
+      tr.innerHTML = `
+        <td><span class="zero-badge">${row.Priority}</span></td>
+        <td class="part-id">${row['Part ID']}</td>
+        <td>${row['Repair Team'] || ''}</td>
+        <td class="num-cell">${row['Rep Req'] !== '' ? row['Rep Req'] : ''}</td>
+        <td class="num-cell">—</td>
+        <td class="num-cell grade-${cls}">${cls}</td>
+        <td class="num-cell">${valStr}</td>`;
+      zeroBody.appendChild(tr);
+    });
+  } else {
+    zeroSection.style.display = 'none';
+  }
 }
 
 function sortBy(col) {
@@ -293,9 +435,14 @@ function sortBy(col) {
 function exportXLSX() {
   if (!outputRows.length) return;
   const wb = XLSX.utils.book_new();
-  const data = outputRows.map(r => ({ 'Priority': r.Priority, 'Part ID': r['Part ID'], 'Repair Team': r['Repair Team'], 'Rep Req': r['Rep Req'], 'Open Orders': r['Open Orders'], 'Total Qty': r['Total Qty'], 'Part Class': r['Part Class'], 'Value': r.Value !== '' ? `£${Number(r.Value).toFixed(2)}` : '' }));
+  const data = outputRows.map(r => ({
+    'Priority': r.Priority, 'Part ID': r['Part ID'], 'Repair Team': r['Repair Team'],
+    'Rep Req': r['Rep Req'], 'Open Orders': r['Open Orders'], 'Total Qty': r['Total Qty'],
+    'Part Class': r['Part Class'], 'Value': r.Value !== '' ? `£${Number(r.Value).toFixed(2)}` : '',
+    'Completed': ticks[safeKey(r['Part ID'])] ? 'Yes' : 'No'
+  }));
   const ws = XLSX.utils.json_to_sheet(data);
-  ws['!cols'] = [8,32,12,8,10,10,8,8].map(w => ({ wch: w }));
+  ws['!cols'] = [8,32,12,8,10,10,8,8,10].map(w => ({ wch: w }));
   XLSX.utils.book_append_sheet(wb, ws, 'Priority Work List');
   XLSX.writeFile(wb, `DCD_Priority_${new Date().toISOString().slice(0,10)}.xlsx`);
 }

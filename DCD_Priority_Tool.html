@@ -331,14 +331,14 @@ async function loadAll() {
     const boRows = await loadCSV('New Repair Centre Back Order Report v1.csv');
 
     document.getElementById('loading-msg').textContent = 'Loading part gradings...';
-    const gradingRows = await loadXLSX('Part Gradings.xlsx');
+    const gradingRows = await loadCSV('Part Gradings.csv');
 
     document.getElementById('loading-msg').textContent = 'Building priority list...';
 
     const gradeMap = {};
     gradingRows.forEach(r => {
-      const id = (r['Part ID'] || r['part_id'] || '').toString().trim();
-      const cls = (r['Part Class'] || r['part_class'] || '').toString().trim();
+      const id = (r['part_id'] || r['Part ID'] || '').toString().trim();
+      const cls = (r['part_class'] || r['Part Class'] || '').toString().trim();
       if (id && cls) gradeMap[id] = cls;
     });
 

@@ -222,11 +222,31 @@ function safeKey(partId) {
 
 function toggleTick(partId) {
   const key = safeKey(partId);
+  const row = outputRows.find(r => r['Part ID'] === partId);
+  if (!row) return;
+
   if (ticks[key]) {
+    // Unticking — restore values
     TICKS_REF.child(key).remove();
   } else {
-    TICKS_REF.child(key).set(true);
+    // Ticking — record the decrement
+    const openOrders = typeof row['Open Orders'] === 'number' ? row['Open Orders'] : 0;
+    const totalQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
+    TICKS_REF.child(key).set({ count: 1, openOrders, totalQty });
   }
+}
+
+function getEffectiveRow(row) {
+  const key = safeKey(row['Part ID']);
+  const tick = ticks[key];
+  if (!tick || typeof tick !== 'object') return row;
+
+  const newOpenOrders = row.Priority === 1
+    ? Math.max(0, (typeof row['Open Orders'] === 'number' ? row['Open Orders'] : 0) - 1)
+    : row['Open Orders'];
+  const newTotalQty = Math.max(0, (typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0) - 1);
+
+  return { ...row, 'Open Orders': newOpenOrders, 'Total Qty': newTotalQty, _ticked: true };
 }
 
 function updateDoneCount() {
@@ -364,6 +384,9 @@ function renderTable() {
   const search = document.getElementById('search-input').value.toLowerCase();
   let rows = outputRows.filter(r => {
     if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
+    const eff = getEffectiveRow(r);
+    // Remove from list if rep req drops to 0 after tick (rank 2 only)
+    if (eff._ticked && r.Priority === 2 && eff['Rep Req'] === 0) return false;
     if (!showDone && ticks[safeKey(r['Part ID'])]) return false;
     return !search || r['Part ID'].toLowerCase().includes(search) || (r['Repair Team'] || '').toLowerCase().includes(search);
   });
@@ -379,20 +402,34 @@ function renderTable() {
   const tbody = document.getElementById('table-body');
   tbody.innerHTML = '';
   rows.forEach(row => {
+    const eff = getEffectiveRow(row);
+    const isDone = eff._ticked || false;
+
+    // Determine effective priority after tick
+    let effPriority = eff.Priority;
+    if (isDone && eff.Priority === 1 && eff['Open Orders'] === 0) effPriority = 2;
+
+    // If rep req is 0 after ticking, skip entirely (handled in filter)
     const tr = document.createElement('tr');
-    const isDone = !!ticks[safeKey(row['Part ID'])];
-    tr.className = isDone ? 'completed' : (row.Priority === 1 ? 'rank1' : 'rank2');
-    const cls = row['Part Class'] || '';
-    const valStr = typeof row.Value === 'number' ? `£${row.Value.toFixed(2)}` : '';
-    const partId = row['Part ID'];
+    tr.className = isDone ? 'completed' : (effPriority === 1 ? 'rank1' : 'rank2');
+    const cls = eff['Part Class'] || '';
+    const valStr = typeof eff.Value === 'number' ? `£${eff.Value.toFixed(2)}` : '';
+    const partId = eff['Part ID'];
+
+    // Show effective badge based on open orders
+    const displayPriority = (eff.Priority === 1 && isDone && eff['Open Orders'] === 0) ? 2 : eff.Priority;
+    const openOrdersDisplay = eff.Priority === 1
+      ? (isDone ? eff['Open Orders'] : (eff['Open Orders'] !== '' ? eff['Open Orders'] : ''))
+      : '';
+
     tr.innerHTML = `
       <td class="tick-cell"><input type="checkbox" class="tick-box" ${isDone ? 'checked' : ''} onchange="toggleTick('${partId}')"/></td>
-      <td><span class="badge badge-${row.Priority}">${row.Priority}</span></td>
+      <td><span class="badge badge-${displayPriority}">${displayPriority}</span></td>
       <td class="part-id">${partId}</td>
-      <td>${row['Repair Team'] || ''}</td>
-      <td class="num-cell">${row['Rep Req'] !== '' ? row['Rep Req'] : ''}</td>
-      <td class="num-cell">${row['Open Orders'] !== '' ? row['Open Orders'] : ''}</td>
-      <td class="num-cell">${row['Total Qty'] !== '' ? row['Total Qty'] : ''}</td>
+      <td>${eff['Repair Team'] || ''}</td>
+      <td class="num-cell">${eff['Rep Req'] !== '' ? eff['Rep Req'] : ''}</td>
+      <td class="num-cell">${openOrdersDisplay !== '' ? openOrdersDisplay : ''}</td>
+      <td class="num-cell">${eff['Total Qty'] !== '' ? eff['Total Qty'] : ''}</td>
       <td class="num-cell grade-${cls}">${cls}</td>
       <td class="num-cell">${valStr}</td>`;
     tbody.appendChild(tr);

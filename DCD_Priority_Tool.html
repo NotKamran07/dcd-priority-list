@@ -73,16 +73,20 @@
   .grade-S { color: #e87040; }
   .grade-X { color: #e84040; font-weight: 700; }
 
-  /* Tick checkbox */
-  .tick-cell { text-align: center; width: 40px; }
-  .tick-box {
-    width: 18px; height: 18px; border-radius: 3px; border: 2px solid var(--border);
-    background: transparent; cursor: pointer; appearance: none; -webkit-appearance: none;
-    display: inline-block; vertical-align: middle; position: relative; transition: all 0.15s;
+  /* Tick counter */
+  .tick-cell { text-align: center; width: 80px; }
+  .tick-counter { display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .tick-minus, .tick-plus {
+    width: 22px; height: 22px; border-radius: 3px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); font-size: 14px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+    line-height: 1; transition: all 0.15s; padding: 0;
   }
-  .tick-box:checked { background: var(--green); border-color: var(--green); }
-  .tick-box:checked::after { content: '✓'; position: absolute; color: white; font-size: 11px; font-weight: 700; top: -1px; left: 2px; }
-  .tick-box:hover { border-color: var(--green); }
+  .tick-plus:hover { border-color: var(--green); color: var(--green); background: rgba(46,204,113,0.1); }
+  .tick-minus:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); background: rgba(232,82,58,0.1); }
+  .tick-minus:disabled { opacity: 0.2; cursor: not-allowed; }
+  .tick-num { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.85rem; min-width: 20px; text-align: center; color: var(--muted); }
+  .tick-num.ticked { color: var(--green); }
 
   /* Live indicator */
   .live-dot { display: inline-block; width: 7px; height: 7px; background: var(--green); border-radius: 50%; margin-right: 5px; animation: pulse 2s infinite; }
@@ -161,7 +165,7 @@
   <table>
     <thead>
       <tr>
-        <th class="tick-cell">Done</th>
+        <th class="tick-cell">Ticked</th>
         <th onclick="sortBy('Priority')">Priority <span>↕</span></th>
         <th onclick="sortBy('Part ID')">Part ID <span>↕</span></th>
         <th onclick="sortBy('Repair Team')">Team <span>↕</span></th>
@@ -220,37 +224,48 @@ function safeKey(partId) {
   return partId.replace(/[.#$\[\]]/g, '_');
 }
 
-function toggleTick(partId) {
+function addTick(partId) {
   const key = safeKey(partId);
-  const row = outputRows.find(r => r['Part ID'] === partId);
-  if (!row) return;
+  const current = (ticks[key] && typeof ticks[key] === 'object') ? (ticks[key].count || 0) : 0;
+  TICKS_REF.child(key).set({ count: current + 1 });
+}
 
-  if (ticks[key]) {
-    // Unticking — restore values
+function removeTick(partId) {
+  const key = safeKey(partId);
+  const current = (ticks[key] && typeof ticks[key] === 'object') ? (ticks[key].count || 0) : 0;
+  if (current <= 1) {
     TICKS_REF.child(key).remove();
   } else {
-    // Ticking — record the decrement
-    const openOrders = typeof row['Open Orders'] === 'number' ? row['Open Orders'] : 0;
-    const totalQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
-    TICKS_REF.child(key).set({ count: 1, openOrders, totalQty });
+    TICKS_REF.child(key).set({ count: current - 1 });
   }
 }
 
-function getEffectiveRow(row) {
-  const key = safeKey(row['Part ID']);
+function getTickCount(partId) {
+  const key = safeKey(partId);
   const tick = ticks[key];
-  if (!tick || typeof tick !== 'object') return row;
+  if (!tick) return 0;
+  if (typeof tick === 'object') return tick.count || 0;
+  return tick ? 1 : 0;
+}
 
-  const newOpenOrders = row.Priority === 1
-    ? Math.max(0, (typeof row['Open Orders'] === 'number' ? row['Open Orders'] : 0) - 1)
-    : row['Open Orders'];
-  const newTotalQty = Math.max(0, (typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0) - 1);
+function getEffectiveRow(row) {
+  const count = getTickCount(row['Part ID']);
+  if (count === 0) return row;
 
-  return { ...row, 'Open Orders': newOpenOrders, 'Total Qty': newTotalQty, _ticked: true };
+  const origOpenOrders = typeof row['Open Orders'] === 'number' ? row['Open Orders'] : 0;
+  const origTotalQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
+  const origRepReq = typeof row['Rep Req'] === 'number' ? row['Rep Req'] : 0;
+
+  const newOpenOrders = row.Priority === 1 ? Math.max(0, origOpenOrders - count) : origOpenOrders;
+  const newTotalQty = Math.max(0, origTotalQty - count);
+  const newRepReq = Math.max(0, origRepReq - count);
+
+  return { ...row, 'Open Orders': newOpenOrders, 'Total Qty': newTotalQty, 'Rep Req': newRepReq, _tickCount: count };
 }
 
 function updateDoneCount() {
-  document.getElementById('stat-done').textContent = Object.keys(ticks).length;
+  const count = Object.values(ticks).reduce((sum, v) => sum + (typeof v === 'object' ? (v.count || 0) : (v ? 1 : 0)), 0);
+  document.getElementById('stat-done').textContent = count;
 }
 
 function toggleDone() {
@@ -386,8 +401,8 @@ function renderTable() {
     if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
     const eff = getEffectiveRow(r);
     // Remove from list if rep req drops to 0 after tick (rank 2 only)
-    if (eff._ticked && r.Priority === 2 && eff['Rep Req'] === 0) return false;
-    if (!showDone && ticks[safeKey(r['Part ID'])]) return false;
+    if (getTickCount(r['Part ID']) > 0 && eff['Rep Req'] === 0) return false;
+    if (!showDone && getTickCount(r['Part ID']) > 0) return false;
     return !search || r['Part ID'].toLowerCase().includes(search) || (r['Repair Team'] || '').toLowerCase().includes(search);
   });
   if (sortCol) {
@@ -403,7 +418,8 @@ function renderTable() {
   tbody.innerHTML = '';
   rows.forEach(row => {
     const eff = getEffectiveRow(row);
-    const isDone = eff._ticked || false;
+    const tickCount = getTickCount(row['Part ID']);
+    const isDone = tickCount > 0;
 
     // Determine effective priority after tick
     let effPriority = eff.Priority;
@@ -422,8 +438,15 @@ function renderTable() {
       ? (isDone ? eff['Open Orders'] : (eff['Open Orders'] !== '' ? eff['Open Orders'] : ''))
       : '';
 
+    const tickCount = getTickCount(partId);
     tr.innerHTML = `
-      <td class="tick-cell"><input type="checkbox" class="tick-box" ${isDone ? 'checked' : ''} onchange="toggleTick('${partId}')"/></td>
+      <td class="tick-cell">
+        <div class="tick-counter">
+          <button class="tick-minus" onclick="removeTick('${partId}')" ${tickCount === 0 ? 'disabled' : ''}>−</button>
+          <span class="tick-num ${tickCount > 0 ? 'ticked' : ''}">${tickCount}</span>
+          <button class="tick-plus" onclick="addTick('${partId}')">+</button>
+        </div>
+      </td>
       <td><span class="badge badge-${displayPriority}">${displayPriority}</span></td>
       <td class="part-id">${partId}</td>
       <td>${eff['Repair Team'] || ''}</td>

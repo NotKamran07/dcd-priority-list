@@ -284,10 +284,21 @@ function resetTicks() {
 }
 
 async function fetchFile(filename) {
-  const url = `${RAW}/${encodeURIComponent(filename)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Could not load "${filename}" (HTTP ${res.status})`);
-  return await res.arrayBuffer();
+  // Try jsDelivr first, fallback to raw.githubusercontent
+  const urls = [
+    `https://cdn.jsdelivr.net/gh/NotKamran07/dcd-priority-list@main/${encodeURIComponent(filename)}`,
+    `https://raw.githubusercontent.com/NotKamran07/dcd-priority-list/main/${encodeURIComponent(filename)}`
+  ];
+  
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: 'no-cache' });
+      if (res.ok) return await res.arrayBuffer();
+    } catch(e) {
+      continue;
+    }
+  }
+  throw new Error(`Could not load "${filename}" — check the file exists in your GitHub repository and is named correctly.`);
 }
 
 async function loadXLSX(filename) {
@@ -324,13 +335,13 @@ async function loadAll() {
   document.getElementById('error-msg').style.display = 'none';
 
   try {
-    document.getElementById('loading-msg').textContent = 'Loading PowerBI data...';
+    document.getElementById('loading-msg').textContent = 'Loading PowerBI data (Both PowerBi Complete.xlsx)...';
     const pbiRows = await loadXLSX('Both PowerBi Complete.xlsx');
 
-    document.getElementById('loading-msg').textContent = 'Loading backorder report...';
+    document.getElementById('loading-msg').textContent = 'Loading backorder report (New Repair Centre Back Order Report v1.csv)...';
     const boRows = await loadCSV('New Repair Centre Back Order Report v1.csv');
 
-    document.getElementById('loading-msg').textContent = 'Loading part gradings...';
+    document.getElementById('loading-msg').textContent = 'Loading part gradings (Part Gradings.csv)...';
     const gradingRows = await loadCSV('Part Gradings.csv');
 
     document.getElementById('loading-msg').textContent = 'Building priority list...';

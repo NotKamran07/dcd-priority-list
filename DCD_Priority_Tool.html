@@ -263,7 +263,10 @@ function getEffectiveRow(row) {
   const newTotalQty = Math.max(0, origTotalQty - count);
   const newRepReq = Math.max(0, origRepReq - count);
 
-  return { ...row, 'Open Orders': newOpenOrders, 'Total Qty': newTotalQty, 'Rep Req': newRepReq, _tickCount: count };
+  // Only flag as fully done when ticks reach open orders (rank1) or rep req (rank2)
+  const fullyDone = row.Priority === 1 ? newOpenOrders === 0 : newRepReq === 0;
+
+  return { ...row, 'Open Orders': newOpenOrders, 'Total Qty': newTotalQty, 'Rep Req': newRepReq, _tickCount: count, _fullyDone: fullyDone };
 }
 
 function updateDoneCount() {
@@ -327,6 +330,15 @@ async function loadCSV(filename) {
   return allRows;
 }
 
+async function loadGradingsCSV(filename) {
+  const buf = await fetchFile(filename);
+  const text = new TextDecoder('utf-8').decode(buf);
+  // Read as a single flat CSV — no section splitting
+  const wb = XLSX.read(text, { type: 'string' });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
+  return rows;
+}
+
 async function loadAll() {
   document.getElementById('loading-bar').style.display = 'flex';
   document.getElementById('stats-bar').style.display = 'none';
@@ -342,7 +354,7 @@ async function loadAll() {
     const boRows = await loadCSV('New Repair Centre Back Order Report v1.csv');
 
     document.getElementById('loading-msg').textContent = 'Loading part gradings (Part Gradings.csv)...';
-    const gradingRows = await loadCSV('Part Gradings.csv');
+    const gradingRows = await loadGradingsCSV('Part Gradings.csv');
 
     document.getElementById('loading-msg').textContent = 'Building priority list...';
 
@@ -414,8 +426,8 @@ function renderTable() {
   let rows = outputRows.filter(r => {
     if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
     const eff = getEffectiveRow(r);
-    // Remove from list if rep req drops to 0 after tick (rank 2 only)
-    if (getTickCount(r['Part ID']) > 0 && eff['Rep Req'] === 0) return false;
+    // Only remove from list when fully done
+    if (eff._fullyDone) return false;
     if (!showDone && getTickCount(r['Part ID']) > 0) return false;
     return !search || r['Part ID'].toLowerCase().includes(search) || (r['Repair Team'] || '').toLowerCase().includes(search);
   });
@@ -434,14 +446,15 @@ function renderTable() {
     const eff = getEffectiveRow(row);
     const tickCount = getTickCount(row['Part ID']);
     const isDone = tickCount > 0;
+    const isFullyDone = eff._fullyDone || false;
 
-    // Determine effective priority after tick
+    // Only promote to rank 2 when open orders fully reach 0
     let effPriority = eff.Priority;
-    if (isDone && eff.Priority === 1 && eff['Open Orders'] === 0) effPriority = 2;
+    if (isFullyDone && eff.Priority === 1 && eff['Open Orders'] === 0) effPriority = 2;
 
     // If rep req is 0 after ticking, skip entirely (handled in filter)
     const tr = document.createElement('tr');
-    tr.className = isDone ? 'completed' : (effPriority === 1 ? 'rank1' : 'rank2');
+    tr.className = isFullyDone ? 'completed' : (effPriority === 1 ? 'rank1' : 'rank2');
     const cls = eff['Part Class'] || '';
     const valStr = typeof eff.Value === 'number' ? `£${eff.Value.toFixed(2)}` : '';
     const partId = eff['Part ID'];

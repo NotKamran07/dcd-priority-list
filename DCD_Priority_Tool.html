@@ -15,13 +15,40 @@
     --rank1-bg: #2a1a17; --rank1-alt: #241512; --rank2-bg: #131c2e; --rank2-alt: #101827;
     --green: #2ecc71; --done-bg: #0f1f14; --done-alt: #0d1b11;
   }
+  body.light-mode {
+    --bg: #f4f5f7; --surface: #ffffff; --surface2: #eaecf0; --border: #d0d3dc;
+    --accent: #c93d27; --accent2: #2a5fa8; --text: #1a1c24; --muted: #6b6f82;
+    --rank1-bg: #fdeae4; --rank1-alt: #fad8ce; --rank2-bg: #e8f0fb; --rank2-alt: #d6e5f7;
+    --green: #1e9e55; --done-bg: #e8f5ee; --done-alt: #d4eddf;
+  }
+  body.light-mode .logo-mark { background: var(--accent); }
+  body.light-mode #zero-table td { color: #444; }
+  body.light-mode .zero-heading { color: #555; }
+  body.light-mode #completed-table td { background: var(--done-bg); color: #444; }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg); color: var(--text); font-family: 'IBM Plex Mono', monospace; min-height: 100vh; }
   header { padding: 1.5rem 2.5rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1.2rem; }
   .logo-mark { width: 40px; height: 40px; background: var(--accent); display: flex; align-items: center; justify-content: center; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; color: white; flex-shrink: 0; }
   header h1 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.3rem; letter-spacing: -0.02em; }
   header p { font-size: 0.68rem; color: var(--muted); margin-top: 2px; }
-  .header-right { margin-left: auto; text-align: right; }
+  .header-right { margin-left: auto; text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  #theme-toggle {
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 20px; padding: 4px 10px; transition: all 0.2s;
+  }
+  #theme-toggle:hover { border-color: var(--muted); }
+  .toggle-track {
+    width: 32px; height: 18px; background: var(--border); border-radius: 9px;
+    position: relative; transition: background 0.2s;
+  }
+  body.light-mode .toggle-track { background: var(--accent); }
+  .toggle-thumb {
+    width: 12px; height: 12px; background: white; border-radius: 50%;
+    position: absolute; top: 3px; left: 3px; transition: left 0.2s;
+  }
+  body.light-mode .toggle-thumb { left: 17px; }
+  .toggle-label { font-size: 0.62rem; color: var(--muted); font-family: 'IBM Plex Mono', monospace; }
   #date-badge { font-size: 0.65rem; color: var(--muted); }
   #last-updated { font-size: 0.65rem; color: var(--green); display: none; margin-top: 2px; }
   #loading-bar { padding: 3rem 2.5rem; display: flex; flex-direction: column; align-items: center; gap: 1rem; }
@@ -181,6 +208,10 @@
     <p>Auto-loads latest data · Live completion tracking</p>
   </div>
   <div class="header-right">
+    <div id="theme-toggle" onclick="toggleTheme()">
+      <span class="toggle-label" id="theme-label">🌙 Dark</span>
+      <div class="toggle-track"><div class="toggle-thumb"></div></div>
+    </div>
     <div id="date-badge"></div>
     <div id="last-updated"></div>
     <div id="live-status"><span class="live-dot"></span>Live sync active</div>
@@ -425,6 +456,24 @@ async function loadGradingsCSV(filename) {
   const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
   return rows;
 }
+
+function toggleTheme() {
+  const isLight = document.body.classList.toggle('light-mode');
+  document.getElementById('theme-label').textContent = isLight ? '☀️ Light' : '🌙 Dark';
+  localStorage.setItem('dcd-theme', isLight ? 'light' : 'dark');
+}
+
+// Restore saved theme preference
+(function() {
+  const saved = localStorage.getItem('dcd-theme');
+  if (saved === 'light') {
+    document.body.classList.add('light-mode');
+    document.addEventListener('DOMContentLoaded', () => {
+      const lbl = document.getElementById('theme-label');
+      if (lbl) lbl.textContent = '☀️ Light';
+    });
+  }
+})();
 
 async function loadAll() {
   document.getElementById('loading-bar').style.display = 'flex';

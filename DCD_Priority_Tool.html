@@ -201,7 +201,10 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 
-const RAW = 'https://raw.githubusercontent.com/NotKamran07/dcd-priority-list/main';
+const REPO = 'NotKamran07/dcd-priority-list';
+const BRANCH = 'main';
+// Use jsDelivr CDN which has CORS enabled for GitHub files
+const RAW = `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}`;
 const GRADE_VALUE = { A: 0.10, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
 const TODAY = new Date().toISOString().slice(0, 10);
 const TICKS_REF = db.ref(`ticks/${TODAY}`);

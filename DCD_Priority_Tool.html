@@ -162,6 +162,7 @@
   #completed-table .part-id { font-weight: 500; color: var(--text); }
   #completed-table .num-cell { text-align: center; }
   .empty-done { text-align: center; padding: 3rem; color: var(--muted); font-size: 0.75rem; }
+  #earnings-bar { border-bottom: 1px solid var(--border); margin-bottom: 1.5rem; padding-bottom: 1.5rem !important; }
 
   /* Zero qty section */
   #zero-section { padding: 0 2.5rem 3rem; display: none; }
@@ -289,6 +290,20 @@
 </div>
 
 <div id="completed-wrap">
+  <div id="earnings-bar" style="display:none; padding: 1rem 0 1.5rem; gap: 2.5rem; align-items: center; flex-wrap: wrap;">
+    <div class="stat">
+      <span class="stat-label">Total Earned Today</span>
+      <span class="stat-value" id="earnings-total" style="color:var(--green); font-size:1.8rem;">£0.00</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Parts Completed</span>
+      <span class="stat-value" id="earnings-parts" style="color:var(--text);">0</span>
+    </div>
+    <div class="stat">
+      <span class="stat-label">Total Repairs</span>
+      <span class="stat-value" id="earnings-ticks" style="color:var(--text);">0</span>
+    </div>
+  </div>
   <table id="completed-table">
     <thead>
       <tr>
@@ -300,6 +315,7 @@
         <th class="num-cell">Original Qty</th>
         <th class="num-cell">Class</th>
         <th class="num-cell">Value</th>
+        <th class="num-cell">Earned</th>
       </tr>
     </thead>
     <tbody id="completed-body"></tbody>
@@ -709,13 +725,23 @@ function renderCompleted() {
 
   if (doneRows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="8" class="empty-done">No parts completed yet today</td></tr>';
+    document.getElementById('earnings-bar').style.display = 'none';
     return;
   }
+
+  let totalEarnings = 0;
+  let totalTicks = 0;
 
   doneRows.forEach(row => {
     const tickCount = getTickCount(row['Part ID']);
     const cls = row['Part Class'] || '';
-    const valStr = typeof row.Value === 'number' ? `£${row.Value.toFixed(2)}` : '';
+    const val = typeof row.Value === 'number' ? row.Value : 0;
+    const rowEarnings = val * tickCount;
+    totalEarnings += rowEarnings;
+    totalTicks += tickCount;
+
+    const valStr = val ? `£${val.toFixed(2)}` : '';
+    const rowEarningsStr = rowEarnings ? `£${rowEarnings.toFixed(2)}` : '—';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><span class="badge badge-${row.Priority}">${row.Priority}</span></td>
@@ -725,9 +751,17 @@ function renderCompleted() {
       <td class="num-cell">${row['Open Orders'] !== '' ? row['Open Orders'] : '—'}</td>
       <td class="num-cell">${row['Total Qty'] !== '' ? row['Total Qty'] : '—'}</td>
       <td class="num-cell grade-${cls}">${cls}</td>
-      <td class="num-cell">${valStr}</td>`;
+      <td class="num-cell">${valStr}</td>
+      <td class="num-cell" style="color:var(--green);font-weight:600;">${rowEarningsStr}</td>`;
     tbody.appendChild(tr);
   });
+
+  // Update earnings bar
+  const bar = document.getElementById('earnings-bar');
+  bar.style.display = 'flex';
+  document.getElementById('earnings-total').textContent = `£${totalEarnings.toFixed(2)}`;
+  document.getElementById('earnings-parts').textContent = doneRows.length;
+  document.getElementById('earnings-ticks').textContent = totalTicks;
 }
 
 function setDept(dept, btn) {

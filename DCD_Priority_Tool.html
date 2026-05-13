@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DCD Priority Work List</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg: #0e0f13;
+    --surface: #16181f;
+    --surface2: #1e2029;
+    --border: #2a2c38;
+    --accent: #e8523a;
+    --accent2: #3a7bd5;
+    --text: #e8e9ed;
+    --muted: #6b6f82;
+    --rank1-bg: #2a1a17;
+    --rank1-alt: #241512;
+    --rank1-badge: #e8523a;
+    --rank2-bg: #131c2e;
+    --rank2-alt: #101827;
+    --rank2-badge: #3a7bd5;
+    --green: #2ecc71;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    min-height: 100vh;
+  }
+
+  /* Header */
+  header {
+    padding: 2rem 2.5rem 1.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: flex-end;
+    gap: 1.5rem;
+  }
+  .logo-mark {
+    width: 42px; height: 42px;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800; font-size: 18px;
+    color: white;
+    flex-shrink: 0;
+  }
+  header h1 {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.4rem;
+    letter-spacing: -0.02em;
+    color: var(--text);
+  }
+  header p {
+    font-size: 0.7rem;
+    color: var(--muted);
+    margin-top: 2px;
+  }
+  .header-right {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  #date-badge {
+    font-size: 0.65rem;
+    color: var(--muted);
+    text-align: right;
+  }
+
+  /* Upload zone */
+  .upload-section {
+    padding: 2rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .upload-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    max-width: 900px;
+  }
+  .upload-card {
+    background: var(--surface);
+    border: 1px dashed var(--border);
+    border-radius: 4px;
+    padding: 1.2rem;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+  }
+  .upload-card:hover { border-color: var(--muted); background: var(--surface2); }
+  .upload-card.loaded { border-color: var(--green); border-style: solid; }
+  .upload-card input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+  }
+  .upload-label {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.75rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+  .upload-name {
+    font-size: 0.7rem;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .upload-status {
+    font-size: 0.65rem;
+    margin-top: 6px;
+  }
+  .upload-status.ok { color: var(--green); }
+  .upload-status.waiting { color: var(--muted); }
+
+  /* Generate button */
+  .actions {
+    padding: 1.5rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  #generate-btn {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 0.65rem 1.5rem;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: opacity 0.2s;
+  }
+  #generate-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+  #generate-btn:not(:disabled):hover { opacity: 0.85; }
+  #export-btn {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.8rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--accent2);
+    border: 1px solid var(--accent2);
+    padding: 0.65rem 1.5rem;
+    cursor: pointer;
+    border-radius: 2px;
+    transition: opacity 0.2s;
+    display: none;
+  }
+  #export-btn:hover { opacity: 0.75; }
+  #status-msg {
+    font-size: 0.7rem;
+    color: var(--muted);
+  }
+
+  /* Stats bar */
+  #stats-bar {
+    display: none;
+    padding: 1rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+    gap: 2rem;
+    align-items: center;
+  }
+  .stat { display: flex; flex-direction: column; gap: 2px; }
+  .stat-label { font-size: 0.6rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+  .stat-value { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 1.1rem; }
+  .stat-value.r1 { color: var(--rank1-badge); }
+  .stat-value.r2 { color: var(--rank2-badge); }
+
+  /* Search */
+  #search-bar {
+    display: none;
+    padding: 1rem 2.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  #search-input {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.5rem 0.9rem;
+    border-radius: 2px;
+    width: 300px;
+    outline: none;
+  }
+  #search-input:focus { border-color: var(--muted); }
+
+  /* Table */
+  #table-wrap {
+    padding: 1.5rem 2.5rem 3rem;
+    overflow-x: auto;
+    display: none;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.72rem;
+  }
+  thead tr {
+    background: var(--surface2);
+    border-bottom: 2px solid var(--border);
+  }
+  th {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.65rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--muted);
+    padding: 0.6rem 0.8rem;
+    text-align: left;
+    white-space: nowrap;
+    cursor: pointer;
+    user-select: none;
+  }
+  th:hover { color: var(--text); }
+  th.sorted { color: var(--text); }
+  th .sort-arrow { margin-left: 4px; opacity: 0.5; }
+  th.sorted .sort-arrow { opacity: 1; }
+
+  td {
+    padding: 0.45rem 0.8rem;
+    border-bottom: 1px solid rgba(255,255,255,0.03);
+    white-space: nowrap;
+  }
+  tr.rank1 td { background: var(--rank1-bg); }
+  tr.rank1:nth-child(even) td { background: var(--rank1-alt); }
+  tr.rank2 td { background: var(--rank2-bg); }
+  tr.rank2:nth-child(even) td { background: var(--rank2-alt); }
+  tr:hover td { filter: brightness(1.15); }
+
+  .badge {
+    display: inline-block;
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.6rem;
+    padding: 2px 8px;
+    border-radius: 2px;
+    color: white;
+  }
+  .badge-1 { background: var(--rank1-badge); }
+  .badge-2 { background: var(--rank2-badge); }
+
+  .part-id { font-weight: 500; color: var(--text); }
+  .num-cell { text-align: center; }
+  .class-cell { text-align: center; font-weight: 500; }
+
+  /* Grade colours */
+  .grade-A, .grade-M { color: #aaaaaa; }
+  .grade-B { color: #f0c040; }
+  .grade-C { color: #f0a040; }
+  .grade-S { color: #e87040; }
+  .grade-X { color: #e84040; font-weight: 700; }
+
+  /* Print */
+  @media print {
+    body { background: white; color: black; }
+    header, .upload-section, .actions, #search-bar, #stats-bar { display: none !important; }
+    #table-wrap { display: block !important; padding: 0; }
+    table { font-size: 8pt; }
+    th { color: #333; background: #eee !important; }
+    tr.rank1 td { background: #fce4d6 !important; }
+    tr.rank2 td { background: #ddeeff !important; }
+    .badge-1 { background: #c00000 !important; }
+    .badge-2 { background: #2f75b6 !important; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-mark">DCD</div>
+  <div>
+    <h1>Priority Work List</h1>
+    <p>Upload daily files to generate your prioritised repair list</p>
+  </div>
+  <div class="header-right">
+    <div id="date-badge"></div>
+  </div>
+</header>
+
+<div class="upload-section">
+  <div class="upload-grid">
+    <div class="upload-card" id="card-powerbi">
+      <input type="file" id="file-powerbi" accept=".xlsx,.xls" onchange="handleFile('powerbi', this)"/>
+      <div class="upload-label">PowerBI Export</div>
+      <div class="upload-name" id="name-powerbi">Click to upload .xlsx</div>
+      <div class="upload-status waiting" id="status-powerbi">Waiting...</div>
+    </div>
+    <div class="upload-card" id="card-backorder">
+      <input type="file" id="file-backorder" accept=".csv,.xlsx,.xls" onchange="handleFile('backorder', this)"/>
+      <div class="upload-label">Back Order Report</div>
+      <div class="upload-name" id="name-backorder">Click to upload .csv / .xlsx</div>
+      <div class="upload-status waiting" id="status-backorder">Waiting...</div>
+    </div>
+    <div class="upload-card" id="card-gradings">
+      <input type="file" id="file-gradings" accept=".csv,.xlsx,.xls" onchange="handleFile('gradings', this)"/>
+      <div class="upload-label">Part Gradings</div>
+      <div class="upload-name" id="name-gradings">Click to upload .csv / .xlsx</div>
+      <div class="upload-status waiting" id="status-gradings">Waiting...</div>
+    </div>
+  </div>
+</div>
+
+<div class="actions">
+  <button id="generate-btn" onclick="generate()" disabled>Generate List</button>
+  <button id="export-btn" onclick="exportXLSX()">Export to Excel</button>
+  <span id="status-msg">Upload PowerBI and Back Order files to begin</span>
+</div>
+
+<div id="stats-bar">
+  <div class="stat"><span class="stat-label">Rank 1 (Backorder)</span><span class="stat-value r1" id="stat-r1">—</span></div>
+  <div class="stat"><span class="stat-label">Rank 2 (PowerBI)</span><span class="stat-value r2" id="stat-r2">—</span></div>
+  <div class="stat"><span class="stat-label">Total Parts</span><span class="stat-value" id="stat-total">—</span></div>
+</div>
+
+<div id="search-bar">
+  <input id="search-input" type="search" placeholder="Search by Part ID..." oninput="renderTable()"/>
+</div>
+
+<div id="table-wrap">
+  <table id="main-table">
+    <thead>
+      <tr>
+        <th onclick="sortBy('Priority')" id="th-Priority">Priority <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('Part ID')" id="th-Part ID">Part ID <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('Repair Team')" id="th-Repair Team">Team <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('Rep Req')" id="th-Rep Req" class="num-cell">Rep Req <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('Open Orders')" id="th-Open Orders" class="num-cell">Open Orders <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('Total Qty')" id="th-Total Qty" class="num-cell">Total Qty <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('Part Class')" id="th-Part Class" class="num-cell">Class <span class="sort-arrow">↕</span></th>
+        <th onclick="sortBy('Value')" id="th-Value" class="num-cell">Value <span class="sort-arrow">↕</span></th>
+      </tr>
+    </thead>
+    <tbody id="table-body"></tbody>
+  </table>
+</div>
+
+<script>
+// ---- State ----
+const files = { powerbi: null, backorder: null, gradings: null };
+let outputRows = [];
+let sortCol = null;
+let sortAsc = true;
+
+const GRADE_VALUE = { A: 0.10, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
+
+// DCD Parts list embedded (from All_DCD_Parts_Updated)
+const DCD_PARTS = new Set([
+  "ADP-BT-SPLIT-LIDL","ADP-CCTV-RG59-BNC","ADP-ISC-QMS","AP-UNIFI-NANO-HD","ASW-AP-CIS-MER-CW9162","ASW-AP-CIS-MER-MR44","ASW-CAB-WIN-BA92","ASW-CAM-MOT-VB400V3","ASW-CHG-DOCK-VB400","ASW-DOCK-CON-DC200","ASW-PHONE-YEALINK-W73P","ATM-32-LGT-BD-MK2","ATM-32-REAR-FAN","ATT-WAIT-LOCK-BA83","BEA-PSU-VER-VX680","CAB-CBNA-UO1-S07ZA","CAB-DIGI-CAB65200","CAB-DPORT-DPORT","CAB-HHP-XEN-1900-USB","CAB-MET-STD-RS232","CAB-MOT-U21-S07ZAR","CAB-SCN-9800-12V-USB","CAB-SCN-DATA-RS232","CAB-SCN-MAG-1500I","CAB-SYM-25-32469-20","CAB-SYM-DS4208","CAB-SYM-STI85-0200","CAM-BOBA-CAMERA","CAM-BOBA-CAM-GRY","CAM-BOBA-SENSOR","CCTV-PSU-24V","CDR-ANK-08512-INSERT","CDR-DIG-EC410-INSERT","CDR-FT-EUMOD460-INS","CDR-FT-MOD460-INSERT","CDR-J2-INSERT","CDR-MAT-EP107-INSERT","CDR-MSC5099-INSERT","CDR-SL2000-INSERT","CDR-STD2000-INSERT","CDR-TEC-51A-INSERT","CEC-CRA-HHT-5SLOT-TC51","CEC-CRA-HHT-ZEB-TC51","CEC-PSU-KRO-TIME-CLO","CEC-PSU-M900-65W","CEC-PSU-M900-90W","CEC-PSU-VER-P400","CEC-PTR-AVERY-9417","CEC-PTR-AVERY-9418","CEC-PTR-PAXAR-9486","CEC-STD-FP-READER","CLK-PHONE-YL-W56H","CLK-PSU-APG-CDR","CLK-PSU-CIS-MX68","CLK-PSU-PS170","CON-CDR-3S-423-INS","CON-MO-USB-BLK","CON-PC-EPS-IM700-SCR","CON-POLE-YUNO-CW","CON-SPACE-2POLE","COS-CAB-USB-A-MINI-B","COS-CDR-C4141B-INSERT","COS-CON-BAT-T470","COS-PSU-MIC-GO","COS-PSU-MS-SURFACE-PRO","COS-PSU-VX820-9V","COS-SCN-BC361-USB","COS-TAB-MIC-COMPLIANCE","CRA-SYM-MC3000-USB","CRA-TOSH-TEC-EP800","CRA-VOC-CR-RK-S5","CRA-VOC-S5-REG","CRA-ZEB-TC57-LID","FH-AP-MER-MR33","HOB-PSU-VER-V400M","HTS-DS-ALL-WS37HD8","HTS-DS-AND-PPCNET-D","HWS-ITSU-240-PED-PSU","HWS-ITSU-FLY-MON-PSU","HWS-KBD-MOU-WIRELESS","HWS-PZH-12V-150W-12.5A-PSU","HWS-PZH-12V-7AMP-CLO22-PSU","HWS-PZH-AP-DRAY-1060","HWS-PZH-AP-DRAY-912C","HWS-PZH-CAB-EURO-ELKTX","HWS-PZH-CHRM-BK-N23-PSU","HWS-PZH-PSU-LEN","KBD-ACC-5010","KBD-ACC-596-MINI","KBD-ACC-KYB500-K82B","KBD-ACK-540RF","KBD-AKE-OCU-741","KBD-CHY-GB81-MY700","KBD-CHY-SPOS-G86-624","KBD-HP-FK218AA","KBD-KEY-ACK-340-PS2","KBD-MOU-HP-230","KBD-MOU-HP-235","KBD-PS2-MINI-BLK","KBD-USB-BLK","KBD-USB-MINI-BLK","LID-CRA-PAN-UTMB5","MCD-BSE-ATR-T20-THIN","MCD-BSE-QUA-DT","MCD-BSE-QUA-DUAL-V2","MCD-CAB-HDMI-EXT-KIT","MCD-CAM-QLDKIT","MCD-CASE-NEX-7007","MCD-DMB-AOP-MP-DE3250","MCD-DMB-LG-TFT-49UH7N-E","MCD-DMB-NEC-MP-14256","MCD-DMB-SAM-TFT-OH55F","MCD-DT-AU-3M-BSE-5.20X2-KIT","MCD-DT-AU-HME-BSE6200-KIT","MCD-DT-AU-PAR-G5PLUS-KIT","MCD-DT-GATEWAY-DX80-KIT","MCD-DT-MON-DUAL-10.4-KITMK2","MCD-DT-PUCK-DX80-KIT","MCD-DT-RGAGE-RADR-KIT","MCD-DT-SOTEC-CLOUD-KIT","MCD-HSET-QUA","MCD-KIT-HSET-HS6200","MCD-KSK-EVO-PC-KIT","MCD-KSK-EURO-SCN-MX101-KIT","MCD-KSK-EVOK-PTR-TSP700-KIT","MCD-L3000-DT-PED-CAB-KIT","MCD-MIS-COIN-DISPENSE","MCD-MON-NEC-EA231.22.5-KIT","MCD-ODMB-SAM-TFT-OH55F","MCD-PTR-LAB3-KIT-V2","MCD-PUCK-DHOUS-KIT","MCD-SPK-NEX-7000","OST-CRA-ZEB-TC52-HHT","OST-CRA-ZEB-TC52-PKR","OST-HHT-ZEB-TC51","PAD-NV200-NOTE-READER-BPS","SCN-DATA-3450VSI","SCN-HP-BW868AA","TRG-HHT-ZEB-TC52","TRG-TAB-SAM-A9-PLUS-64","CAB-DAT-EAS","MCD-ODMB-SAM-TFT-OM46D","OST-HHT-ZEB-TC26","ASW-HHT-ZEBRA-TC26","CEC-HHT-ZEB-TC51","COS-HHT-ZEB-TC52","LID-HHT-ZEB-TC57","PAD-HHT-ZEB-TC52","TRG-TAB-SAM-A9-PLUS-64"
+]);
+
+// Date display
+document.getElementById('date-badge').innerHTML =
+  new Date().toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+
+// ---- File handling ----
+function handleFile(key, input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById(`name-${key}`).textContent = file.name;
+  document.getElementById(`status-${key}`).textContent = 'Reading...';
+  document.getElementById(`status-${key}`).className = 'upload-status waiting';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      files[key] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      document.getElementById(`status-${key}`).textContent = `✓ ${files[key].length} rows loaded`;
+      document.getElementById(`status-${key}`).className = 'upload-status ok';
+      document.getElementById(`card-${key}`).classList.add('loaded');
+      checkReady();
+    } catch(err) {
+      document.getElementById(`status-${key}`).textContent = 'Error reading file';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// Also support CSV for backorder/gradings
+document.getElementById('file-backorder').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file || !file.name.endsWith('.csv')) return;
+  document.getElementById('name-backorder').textContent = file.name;
+  document.getElementById('status-backorder').textContent = 'Reading...';
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'string' });
+      // Handle multi-section CSV
+      const raw = e.target.result;
+      const sections = raw.trim().split(/\n\n+/);
+      let allRows = [];
+      sections.forEach(sec => {
+        const wb2 = XLSX.read(sec, { type: 'string' });
+        const ws2 = wb2.Sheets[wb2.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(ws2, { defval: '' });
+        // Normalise column names
+        rows.forEach(r => {
+          const norm = {};
+          Object.keys(r).forEach(k => {
+            if (k.startsWith('part_id')) norm['Part ID'] = String(r[k]).trim();
+            if (k.startsWith('Qty') || k === 'Qty') norm['Qty'] = Number(r[k]) || 0;
+            if (k.startsWith('Department')) norm['Department'] = r[k];
+          });
+          if (norm['Part ID']) allRows.push(norm);
+        });
+      });
+      files['backorder'] = allRows;
+      document.getElementById('status-backorder').textContent = `✓ ${allRows.length} rows loaded`;
+      document.getElementById('status-backorder').className = 'upload-status ok';
+      document.getElementById('card-backorder').classList.add('loaded');
+      checkReady();
+    } catch(err) {
+      document.getElementById('status-backorder').textContent = 'Error reading file';
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}, true);
+
+document.getElementById('file-gradings').addEventListener('change', function() {
+  const file = this.files[0];
+  if (!file || !file.name.endsWith('.csv')) return;
+  document.getElementById('name-gradings').textContent = file.name;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'string' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      files['gradings'] = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      document.getElementById('status-gradings').textContent = `✓ ${files['gradings'].length} rows loaded`;
+      document.getElementById('status-gradings').className = 'upload-status ok';
+      document.getElementById('card-gradings').classList.add('loaded');
+      checkReady();
+    } catch(err) {
+      document.getElementById('status-gradings').textContent = 'Error reading file';
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}, true);
+
+function checkReady() {
+  const ready = files.powerbi && files.backorder;
+  document.getElementById('generate-btn').disabled = !ready;
+  document.getElementById('status-msg').textContent = ready
+    ? 'Ready — click Generate to build your list'
+    : 'Upload PowerBI and Back Order files to begin';
+}
+
+// ---- Generate ----
+function generate() {
+  document.getElementById('status-msg').textContent = 'Processing...';
+
+  // Build gradings map
+  const gradeMap = {};
+  if (files.gradings) {
+    files.gradings.forEach(r => {
+      const id = (r['part_id'] || r['Part ID'] || '').toString().trim();
+      const cls = (r['part_class'] || r['Part Class'] || '').toString().trim();
+      if (id && cls) gradeMap[id] = cls;
+    });
+  }
+
+  // Build PowerBI map (filtered to DCD parts)
+  const pbiMap = {};
+  files.powerbi.forEach(r => {
+    const id = (r['Part ID'] || '').toString().trim();
+    if (!id || !DCD_PARTS.has(id)) return;
+    const repReq = Number(r['Rep Req']) || 0;
+    const totalBad = Number(r['Total Bad']) || 0;
+    const team = (r['Repair Team'] || '').toString().trim();
+    pbiMap[id] = { repReq, totalBad, team };
+  });
+
+  // Build backorder map (filtered to DCD parts)
+  const boMap = {};
+  files.backorder.forEach(r => {
+    const id = (r['Part ID'] || r['part_id2'] || r['part_id4'] || '').toString().trim();
+    if (!id || !DCD_PARTS.has(id)) return;
+    if (!boMap[id]) boMap[id] = { count: 0, totalQty: 0 };
+    boMap[id].count++;
+    boMap[id].totalQty += Number(r['Qty'] || r['Qty2'] || 0);
+  });
+
+  const rank1 = [];
+  const rank2 = [];
+
+  // Rank 1: backorder parts
+  Object.keys(boMap).forEach(id => {
+    const bo = boMap[id];
+    const pbi = pbiMap[id] || { repReq: 0, totalBad: 0, team: '' };
+    const cls = gradeMap[id] || '';
+    const val = GRADE_VALUE[cls] || '';
+    rank1.push({
+      'Priority': 1,
+      'Part ID': id,
+      'Repair Team': pbi.team,
+      'Rep Req': pbi.repReq,
+      'Open Orders': bo.count,
+      'Total Qty': bo.totalQty,
+      'Part Class': cls,
+      'Value': val
+    });
+  });
+
+  // Sort rank 1 by Open Orders desc
+  rank1.sort((a, b) => b['Open Orders'] - a['Open Orders']);
+
+  // Rank 2: PowerBI only (not in backorder, rep req > 0)
+  const boPartIds = new Set(Object.keys(boMap));
+  Object.keys(pbiMap).forEach(id => {
+    if (boPartIds.has(id)) return; // already rank 1
+    const pbi = pbiMap[id];
+    if (pbi.repReq === 0) return;
+    const cls = gradeMap[id] || '';
+    const val = GRADE_VALUE[cls] || '';
+    rank2.push({
+      'Priority': 2,
+      'Part ID': id,
+      'Repair Team': pbi.team,
+      'Rep Req': pbi.repReq,
+      'Open Orders': '',
+      'Total Qty': pbi.totalBad,
+      'Part Class': cls,
+      'Value': val
+    });
+  });
+
+  // Sort rank 2 by Rep Req desc
+  rank2.sort((a, b) => b['Rep Req'] - a['Rep Req']);
+
+  outputRows = [...rank1, ...rank2];
+
+  // Update stats
+  document.getElementById('stat-r1').textContent = rank1.length;
+  document.getElementById('stat-r2').textContent = rank2.length;
+  document.getElementById('stat-total').textContent = outputRows.length;
+  document.getElementById('stats-bar').style.display = 'flex';
+  document.getElementById('search-bar').style.display = 'block';
+  document.getElementById('table-wrap').style.display = 'block';
+  document.getElementById('export-btn').style.display = 'inline-block';
+  document.getElementById('status-msg').textContent = `${outputRows.length} parts generated`;
+
+  sortCol = null;
+  renderTable();
+}
+
+// ---- Render ----
+function renderTable() {
+  const search = document.getElementById('search-input').value.toLowerCase();
+  let rows = outputRows.filter(r =>
+    !search || r['Part ID'].toLowerCase().includes(search) || (r['Repair Team'] || '').toLowerCase().includes(search)
+  );
+
+  if (sortCol) {
+    rows = [...rows].sort((a, b) => {
+      let av = a[sortCol], bv = b[sortCol];
+      if (av === '' || av === null) av = sortAsc ? Infinity : -Infinity;
+      if (bv === '' || bv === null) bv = sortAsc ? Infinity : -Infinity;
+      if (typeof av === 'number' && typeof bv === 'number') return sortAsc ? av - bv : bv - av;
+      return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+    });
+  }
+
+  const tbody = document.getElementById('table-body');
+  tbody.innerHTML = '';
+  rows.forEach(row => {
+    const tr = document.createElement('tr');
+    tr.className = row['Priority'] === 1 ? 'rank1' : 'rank2';
+    const val = row['Value'];
+    const valStr = typeof val === 'number' ? `£${val.toFixed(2)}` : '';
+    const cls = row['Part Class'] || '';
+    const clsClass = cls ? `grade-${cls}` : '';
+    tr.innerHTML = `
+      <td><span class="badge badge-${row['Priority']}">${row['Priority']}</span></td>
+      <td class="part-id">${row['Part ID']}</td>
+      <td>${row['Repair Team'] || ''}</td>
+      <td class="num-cell">${row['Rep Req'] !== '' ? row['Rep Req'] : ''}</td>
+      <td class="num-cell">${row['Open Orders'] !== '' ? row['Open Orders'] : ''}</td>
+      <td class="num-cell">${row['Total Qty'] !== '' ? row['Total Qty'] : ''}</td>
+      <td class="num-cell class-cell ${clsClass}">${cls}</td>
+      <td class="num-cell">${valStr}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function sortBy(col) {
+  if (sortCol === col) { sortAsc = !sortAsc; }
+  else { sortCol = col; sortAsc = false; }
+  document.querySelectorAll('th').forEach(th => th.classList.remove('sorted'));
+  const thEl = document.getElementById(`th-${col}`);
+  if (thEl) {
+    thEl.classList.add('sorted');
+    thEl.querySelector('.sort-arrow').textContent = sortAsc ? '↑' : '↓';
+  }
+  renderTable();
+}
+
+// ---- Export ----
+function exportXLSX() {
+  if (!outputRows.length) return;
+  const wb = XLSX.utils.book_new();
+  const exportData = outputRows.map(r => ({
+    'Priority': r['Priority'],
+    'Part ID': r['Part ID'],
+    'Repair Team': r['Repair Team'],
+    'Rep Req': r['Rep Req'],
+    'Open Orders': r['Open Orders'],
+    'Total Qty': r['Total Qty'],
+    'Part Class': r['Part Class'],
+    'Value': r['Value'] !== '' ? `£${Number(r['Value']).toFixed(2)}` : ''
+  }));
+  const ws = XLSX.utils.json_to_sheet(exportData);
+  ws['!cols'] = [8,32,12,8,10,10,8,8].map(w => ({ wch: w }));
+  XLSX.utils.book_append_sheet(wb, ws, 'Priority Work List');
+  const date = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb, `DCD_Priority_${date}.xlsx`);
+}
+</script>
+</body>
+</html>

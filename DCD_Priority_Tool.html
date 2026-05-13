@@ -49,6 +49,17 @@
   #reset-btn { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
   #reset-btn:hover { opacity: 0.75; }
   #row-count { font-size: 0.65rem; color: var(--muted); margin-left: auto; }
+  .dept-filters { display: flex; gap: 6px; }
+  .dept-btn {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.72rem;
+    letter-spacing: 0.04em; padding: 0.45rem 1rem; cursor: pointer;
+    border-radius: 2px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--muted); transition: all 0.15s;
+  }
+  .dept-btn:hover { color: var(--text); border-color: var(--muted); }
+  .dept-btn.active { background: var(--surface2); color: var(--text); border-color: var(--text); }
+  .dept-btn.active[onclick*="DCD"] { border-color: var(--accent); color: var(--accent); background: rgba(232,82,58,0.1); }
+  .dept-btn.active[onclick*="MCD"] { border-color: var(--accent2); color: var(--accent2); background: rgba(58,123,213,0.1); }
   #table-wrap { padding: 1.5rem 2.5rem 3rem; overflow-x: auto; display: none; }
   table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
   thead tr { background: var(--surface2); border-bottom: 2px solid var(--border); }
@@ -154,6 +165,11 @@
 
 <div id="actions-bar">
   <input id="search-input" type="search" placeholder="Search Part ID or team..." oninput="renderTable()"/>
+  <div class="dept-filters">
+    <button class="dept-btn active" onclick="setDept('all', this)">All Departments</button>
+    <button class="dept-btn" onclick="setDept('RC DCD', this)">RC DCD</button>
+    <button class="dept-btn" onclick="setDept('RC MCD', this)">RC MCD</button>
+  </div>
   <button id="show-done-btn" onclick="toggleDone()">Hide Completed</button>
   <button id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
   <button id="export-btn" onclick="exportXLSX()">Export to Excel</button>
@@ -211,7 +227,7 @@ const TICKS_REF = db.ref(`ticks/${TODAY}`);
 
 const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG59-BNC","ADP-ISC-QMS","AP-UNIFI-NANO-HD","ASW-AP-CIS-MER-CW9162","ASW-AP-CIS-MER-MR44","ASW-CAB-WIN-BA92","ASW-CAM-MOT-VB400V3","ASW-CHG-DOCK-VB400","ASW-CON-CASE-TC26","ASW-CON-SCR-PROT-TC26","ASW-DOCK-CON-DC200","ASW-HHT-ZEB-TC22","ASW-HHT-ZEB-TC27","ASW-HHT-ZEBRA-TC26","ASW-IPAD-GEN9-64GB","ASW-IPAD-RUGGED-CASE","ASW-PHONE-YEALINK-W73P","ASW-SCN-DAT-QD2450","ASW-SCN-MAG-1500I","ASW-SCN-NLSHR3280-PHM","ASW-ZEB-TC52-HHT","ASW-ZEB-TC52-HHT-DC","ATM-32-LGT-BD-MK2","ATM-32-REAR-FAN","ATT-WAIT-LOCK-BA83","BEA-PSU-VER-VX680","BG-SCN-OXH-BC361","BOA-SCN-DAT-3200VSI","BOA-SCN-DAT-3300HSI","CAB-CBNA-UO1-S07ZA","CAB-DAT-EAS","CAB-DIGI-CAB65200","CAB-DPORT-DPORT","CAB-HHP-XEN-1900-USB","CAB-HON-1450G","CAB-HON-7120-USB","CAB-HR2260-USB","CAB-MET-STD-RS232","CAB-MOT-U21-S07ZAR","CAB-SCN-9800-12V-USB","CAB-SCN-DATA-RS232","CAB-SCN-MAG-1500I","CAB-SYM-25-32469-20","CAB-SYM-DS4208","CAB-SYM-STI85-0200","CAM-BOBA-CAM-GRY","CAM-BOBA-CAMERA","CAM-BOBA-SENSOR","CC-SCN-ZEB-DS2208","CCTV-PSU-24V","CDR-ANK-08512-INSERT","CDR-DIG-EC410-INSERT","CDR-FT-EUMOD460-INS","CDR-FT-MOD460-INSERT","CDR-J2-INSERT","CDR-MAT-EP107-INSERT","CDR-MSC5099-INSERT","CDR-SL2000-INSERT","CDR-STD2000-INSERT","CDR-TEC-51A-INSERT","CEC-CAB-521-USB-BLK","CEC-CAB-PWR-KET-STD","CEC-CRA-HHT-5SLOT-TC51","CEC-CRA-HHT-ZEB-TC51","CEC-HHT-ZEB-TC51","CEC-PSU-KRO-TIME-CLO","CEC-PSU-M900-65W","CEC-PSU-M900-90W","CEC-PSU-VER-P400","CEC-PTR-AVERY-9417","CEC-PTR-AVERY-9418","CEC-PTR-PAXAR-9486","CEC-SCN-STAND","CEC-STD-FP-READER","CEC-TAB-ZEB-ET40-10IN","CLK-IPAD-10-64GB","CLK-IPHONE-14-128GB","CLK-PHONE-YL-W56H","CLK-PSU-APG-CDR","CLK-PSU-CIS-MX68","CLK-PSU-PS170","CON-CDR-3S-423-INS","CON-MO-USB-BLK","CON-PC-EPS-IM700-SCR","CON-POLE-YUNO-CW","CON-SPACE-2POLE","CON-VER-P400-MGRP-BLK","COS-CAB-DS457-USB","COS-CAB-DS9208-USB","COS-CAB-USB-A-MINI-B","COS-CDR-C4141B-INSERT","COS-CON-BAT-T470","COS-MSR-MS-GO2","COS-PLT-DS9208","COS-PSU-MIC-GO","COS-PSU-MS-SURFACE-PRO","COS-PSU-VX820-9V","COS-SCN-BC361-USB","COS-SCN-DAT-4400","COS-SCN-DS457-USB","COS-SCN-DS9208-USB","COS-SCN-NWL-USB","COS-TAB-CASE-MS-GO2","COS-TAB-EASEL-GO2","COS-TAB-MIC-COMPLIANCE","COS-TAB-PCLIP","COS-TAB-SCR-PROT","COS-TAB-SHLD-STRP","COS-TAB-TYP-COVER","COS-TAB-UAG-COVER","CRA-SYM-MC3000-USB","CRA-TOSH-TEC-EP800","CRA-VOC-CR-RK-S5","CRA-VOC-S5-REG","CRA-VOC-S5-STD","CRA-ZEB-TC57-LID","CRA-ZEB-TC58-LID","FH-AP-MER-MR33","HBS-SCN-HON-1450G","HOB-CRA-CAS-S1F2-BASE","HOB-PSU-VER-V400M","HSM-POS-SCANNER","HTS-DS-ALL-WS37HD8","HTS-DS-AND-PPCNET-D","HTS-SCN-HON-BO","HTS-SCN-HON-POS","HWS-ITSU-240-PED-PSU","HWS-ITSU-FLY-MON-PSU","HWS-KBD-MOU-WIRELESS","HWS-PZH-12V-150W-12.5A-PSU","HWS-PZH-12V-7AMP-CLO22-PSU","HWS-PZH-AP-DRAY-1060","HWS-PZH-AP-DRAY-912C","HWS-PZH-CAB-EURO-ELKTX","HWS-PZH-CHRM-BK-N23-PSU","HWS-PZH-PSU-LEN","KBD-ACC-5010","KBD-ACC-596-MINI","KBD-ACC-KYB500-K82B","KBD-ACK-540RF","KBD-AKE-OCU-741","KBD-CHY-GB81-MY700","KBD-CHY-SPOS-G86-624","KBD-HP-FK218AA","KBD-KEY-ACK-340-PS2","KBD-MOU-HP-230","KBD-MOU-HP-235","KBD-PS2-MINI-BLK","KBD-USB-BLK","KBD-USB-MINI-BLK","KBD-USB-MINI-CRM","LIB-SCN-HON-XEN-1950","LID-ADP-ISC-QMS","LID-CIS-ATA-192","LID-CRA-DESK-UTMB5","LID-CRA-PAN-UTMB5","LID-FREDERIX-HOTSPOT","LID-PAN-MNT-UTMB5","LID-SMC-ISC-V2.1","LID-SU-AP-HUA-5760-51","LID-TAB-PAN-UTMB5","LYD-AAH-PAP-BRO-HL6400DW","LYD-AAH-TRAY-BRO-LT6505","LYD-E-CAB-U21-S07ZAR","LYD-E-CDU-HP-LD220","LYD-E-CRA-8800-HHT","LYD-E-CRA-SYM-MC3190","LYD-E-KBD-ACK-540U","LYD-E-PSU-8800-HHT","LYD-E-SCN-MOT-DS9208","MCD-BAT-QUA-PRO9","MCD-BSE-NEX-7000-KIT","MCD-BSE-QUA-DT","MCD-BSE-QUA-DUAL-V2","MCD-CAB-PWR-SPLIT-DTSV2","MCD-CASE-NEX-7007","MCD-DOCK-QUA-8PORT","MCD-DT-AU-3M-BSE-5.20X2-KIT","MCD-DT-AU-3M-BSE-526-KIT","MCD-DT-AU-3M-BSE-KIT","MCD-DT-AU-3M-BSE-KIT-HS","MCD-DT-AU-3M-PAR-G5SPK-KIT","MCD-DT-AU-3M-SPK-MIC-KIT","MCD-DT-AU-3M-VENBSE-KIT","MCD-DT-AU-HME-BAT-KIT","MCD-DT-AU-HME-BSE6200-KIT","MCD-DT-AU-HME-MIC-KIT","MCD-DT-AU-HME-PCB-6200","MCD-DT-AU-HME-SPK-KIT","MCD-DT-AU-PAR-G5PLUS-KIT","MCD-DT-AU-PCB-LOOPCARD","MCD-DT-GATEWAY-DX80-KIT","MCD-DT-PUCK-DX80-KIT","MCD-DT-QUAIL-EXTBOX","MCD-DT-RGAGE-RADR-KIT","MCD-DT-SOTEC-CLOUD-KIT","MCD-HDSET-3M-KIT","MCD-HEAD-3M-12SLOT-CHARGER","MCD-HEAD-3M-CHARGER","MCD-HME-FOAM","MCD-HSET-QUA","MCD-KIT-HSET-HS6200","MCD-KIT-NEX-HSET-7002","MCD-KSK-EURO-SCN-MX101-KIT","MCD-KSK-EVOK-SCANCASE-KIT","MCD-KSK-EVOK-SCN-4400-KIT","MCD-KSK-NGK-SCN-N5680-KIT","MCD-MIC-QUA","MCD-NEX-BAT-DOCK","MCD-PUCK-DHOUS-KIT","MCD-PUCK-DTSV2-KIT","MCD-RADR-DTSV2-KIT","MCD-RPTR-QUA","MCD-SCN-ACR-NGK27-KIT","MCD-SCN-DS547-4407-3207","MCD-SCN-ZEB-MD27-KIT","MCD-SPK-NEX-7000","MCD-SPK-QUA","MCD-TRANS-NEX-7000","MED-INTEL-STICK","MNT-DBLD-SCO","MOD-DYNALINK-56K-PCI","MW-SCN-HP-6Y2V4AA","NAN-DS-HKV-DS-D60C-B","NAN-DS-INT-STK1AW32SC","NHS-SCN-DAT-QD2430","NT-BAT-DELL-LAT-5175","NT-BAT-DELL-VEN11","NT-BAT-R11-DUR","NT-DOCK-DELL","NT-DOCK-DURABOOK-R11","NT-DURABOOK-PSU","NT-PSU-DELL-DOCK","NT-PSU-PS-180","NWK-VOC-BSE-STN","NXT-CAB-HON-7580G-USB","NXT-CRA-HON-1902H","NXT-SCN-HON-1902","NXT-SCN-HON-USB-7580G","NXT-SCN-ZEB-RFD8500","ODE-BAT-APC-SMX3000","ODE-CAB-LED-10SQ","ODE-DOCK-HDD-TS-231P","ODE-DOCK-QN-TS431XEU","OFC-SCN-CIP-1100","OFC-SCN-DAT-HD3130","OST-BAT-ZEB-TC52-PKR","OST-CDR-INSERT-DGRY","OST-CRA-HHT-ZEB-TC51","OST-CRA-ZEB-TC52-HHT","OST-CRA-ZEB-TC52-PKR","OST-CRA-ZEB-TC53E","OST-HHT-ZEB-TC51","OST-HHT-ZEB-TC52","OST-HHT-ZEB-TC52-PKR","OST-HHT-ZEB-TC53E","OST-HHT-ZEB-TC77-WH","OST-PSU-CRA-HHT","OST-PTR-HP-TRAY2","OST-SCN-ZEB-RS5000X-WH","OST-TAB-ZEB-WT6400-WH","PAD-BPS-GAS-STRUT","PAD-BPS-SWITCH-DOOR","PAD-NV200-NOTE-READER-BPS","PAD-PHONE-YEALINK-W53P","PAD-SCN-GEWE-FM3080","PAD-SCN-HON-MS9520","PAD-SCN-NLS-FM100","PAD-SCN-NLS-FM3051","PAD-SCN-NLS-FM3080","PH8-SCN-MOT-DS9208","PHONE-BT-DUET-210","PLP-HON-SCN-HF561SR","PS-USA-POS-SCAN-BDL","RI-CAB-SCN-DS8108","RI-SCN-ZEB-DS8108","RI-SCO-ELO-SCANNER2D","RI-SCO-KEONN-ADVANGO","RI-SCO-KEONN-ADVANPAY-120","SCN-CAN-LIDE110","SCN-DAT-3300-MUL","SCN-DAT-GFS4400","SCN-DAT-MAG-8001","SCN-DATA-3450VSI","SCN-DOC-CAN-LIDE300","SCN-DOR-HR2260-HOLDER","SCN-DORA-HR2300-2D","SCN-DORADA-HR2260-2D","SCN-HHP-1300G","SCN-HHP-3800G04E","SCN-HHP-XEN-1900-USB","SCN-HON-MS9540-USB","SCN-HP-1RL97AA","SCN-HP-BW868AA","SCN-HP-BW868AA-STND","SCN-HP-ENG-1-STND","SCN-MAG-1500I-BLK","SCN-MAG-M1500-I","SCN-MET-3780-USB-BLK","SCN-MET-7120-RS2-BLK","SCN-MET-7120-USB-BLK","SCN-MET-9520-KBW-BLK","SCN-MET-9520-KBW-CRM","SCN-MET-9520-USB-BLK","SCN-MET-9520-USB-CRM","SCN-MET-9540-USB-BLK","SCN-MET-QUANTUM-USB","SCN-MOT-DS4308-USB","SCN-MOT-DS457-USB","SCN-MOT-DS9208-USB","SCN-QUANTUM-STAND","SCN-SU-SYM-LS9208-LON","SCN-SYM-DS4208","SCN-SYM-LS9100-400BC","SCN-SYM-LS9208-LON","SCN-UNI-MS320-1G","SCN-ZEB-DS9208-BLK","SCN-ZEB-DS9308-USB","SDR-SCN-ZEB-RFD8500","SDR-TAB-IPHONE-SE","SDR-TAB-IPOD-TCH","SDR-ZEB-CHG-CRA","SDY-SCN-RFID","SEL-CAB-CRA-M-INT433","SEL-CRA-DAT-M-INT433","SEL-SCN-DAT-PM9500","SEL-SCN-DAT-PM9501","SEL-SCN-DS4208-USB","SEL-SCN-MET-9540-USB","SHO-SCN-DS9208-USB","SIG-CRA-VX680","SPK-VOC-HDSET-S5","SUP-CAB-NLSHR22-USB","SUP-HHT-ZEBRA-TC26-PSL","SUP-SCN-HHT-ZEB-TC51","SUP-SU-SCN-DS9208-EAS","SVR-VOC-CTRLR","THR-BAT-SYM-CS4070","THR-CAB-IPAD-CHARGE-BLK","THR-CAB-SYM-CS4070","THR-CAB-ZEB-CS4070","THR-CON-CS4070-LANYARD","THR-DOCK-CHARGE-6080","THR-DOCK-CHARGE-CS4070","THR-DOCK-CHG-CUP-6080","THR-IPAD-AIR-4TH","THR-IPAD-RUGGED-CASE","THR-SCN-SYM-CS4070","THR-SCN-ZEB-CS6080","TPRG-SCN-DS2208-SR","TPS-CAB-SCN-DS9308","TPS-CRA-TC51","TPS-SCN-DS9208-SR2D","TPS-SCN-ZEB-DS9308","TRG-BAT-ZEB-HHT","TRG-CASE-SAM-A8-10.5IN","TRG-CRA-SYM-MC40-5SLOT","TRG-CRA-VX680","TRG-CRA-ZEB-BAT-4SLOT","TRG-CRA-ZEB-HHT-BAT-4SLOT","TRG-CRA-ZEB-TC52-5SLOT","TRG-HHT-ZEB-TC22","TRG-HHT-ZEB-TC52","TRG-MON-HP-E22-G5-22IN","TRG-PHONE-BT-DECT","TRG-SCN-SYM-DS9208","TRG-SCN-ZEB-DS9308","TRG-TAB-IPAD-MINI-A2124","TRG-TAB-IPAD-MINI-A2133","TRG-TAB-IPAD-MINI-A2567","TRG-TAB-IPAD-MINI-A2993","TRG-TAB-IPAD-MINI2","TRG-TAB-IPAD7-A2197","TRG-TAB-IPAD9-A2602","TRG-TAB-IPOD-TCH-6GEN","TRG-TAB-SAM-A8","TRG-TAB-SAM-A9-PLUS-64","TUI-LAP-DELL-WD19-DOCK","WHI-SCN-SYM-DS9208-USB","WHIT-MNT-TAB-DFWC-KIT","WHIT-SCN-WINCOR","WHIT-TAB-CSE-LEN-M10","WHIT-TAB-LEN-M10","YC-SCN-DS9208","YC-SCN-ZEB-DS9308"]);
 
-let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, showDone = true;
+let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, showDone = true, deptFilter = 'all';
 
 document.getElementById('date-badge').textContent =
   new Date().toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
@@ -430,6 +446,7 @@ function renderTable() {
     if (!showDone && eff._fullyDone) return false;
     // Hide partially ticked items when showDone is false
     if (!showDone && getTickCount(r['Part ID']) > 0) return false;
+    if (deptFilter !== 'all' && (r['Repair Team'] || '').trim() !== deptFilter) return false;
     return !search || r['Part ID'].toLowerCase().includes(search) || (r['Repair Team'] || '').toLowerCase().includes(search);
   });
   if (sortCol) {
@@ -467,12 +484,14 @@ function renderTable() {
       : '';
 
     const rowTickCount = getTickCount(partId);
+    const origTotalQty = typeof eff['Total Qty'] === 'number' ? eff['Total Qty'] : 0;
+    const plusDisabled = origTotalQty <= 0;
     tr.innerHTML = `
       <td class="tick-cell">
         <div class="tick-counter">
           <button class="tick-minus" onclick="removeTick('${partId}')" ${rowTickCount === 0 ? 'disabled' : ''}>−</button>
           <span class="tick-num ${rowTickCount > 0 ? 'ticked' : ''}">${rowTickCount}</span>
-          <button class="tick-plus" onclick="addTick('${partId}')">+</button>
+          <button class="tick-plus" onclick="addTick('${partId}')" ${plusDisabled ? 'disabled' : ''}>+</button>
         </div>
       </td>
       <td><span class="badge badge-${displayPriority}">${displayPriority}</span></td>
@@ -490,6 +509,7 @@ function renderTable() {
   // Zero qty section
   const zeroRows = outputRows.filter(r => {
     const eff = getEffectiveRow(r);
+    if (deptFilter !== 'all' && (r['Repair Team'] || '').trim() !== deptFilter) return false;
     return (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') && !eff._fullyDone;
   });
   const zeroSection = document.getElementById('zero-section');
@@ -515,6 +535,13 @@ function renderTable() {
   } else {
     zeroSection.style.display = 'none';
   }
+}
+
+function setDept(dept, btn) {
+  deptFilter = dept;
+  document.querySelectorAll('.dept-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderTable();
 }
 
 function sortBy(col) {

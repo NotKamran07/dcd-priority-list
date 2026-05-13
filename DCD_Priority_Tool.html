@@ -36,11 +36,32 @@
   .stat-value.r1 { color: var(--accent); }
   .stat-value.r2 { color: var(--accent2); }
   .stat-value.done { color: var(--green); }
+  /* Tabs */
+  #tab-bar { display: none; border-bottom: 1px solid var(--border); padding: 0 2.5rem; gap: 0; }
+  .tab-btn {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem;
+    letter-spacing: 0.05em; text-transform: uppercase; padding: 0.9rem 1.5rem;
+    cursor: pointer; border: none; background: transparent; color: var(--muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
+  .tab-btn .tab-count {
+    display: inline-block; font-size: 0.6rem; padding: 1px 6px;
+    border-radius: 10px; background: var(--surface2); color: var(--muted);
+    margin-left: 6px; font-family: 'IBM Plex Mono', monospace;
+  }
+  .tab-btn.active .tab-count { background: var(--accent); color: white; }
+  .tab-btn.tab-done.active { border-bottom-color: var(--green); }
+  .tab-btn.tab-done.active .tab-count { background: var(--green); }
+
   #actions-bar { display: none; padding: 1rem 2.5rem; border-bottom: 1px solid var(--border); gap: 1rem; align-items: center; flex-wrap: wrap; }
   #search-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; padding: 0.45rem 0.85rem; border-radius: 2px; width: 250px; outline: none; }
   #search-input:focus { border-color: var(--muted); }
   #show-done-btn, #export-btn, #refresh-btn, #reset-btn { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.5rem 1.2rem; cursor: pointer; border-radius: 2px; transition: opacity 0.2s; }
   #export-btn { background: transparent; color: var(--accent2); border: 1px solid var(--accent2); }
+  .print-btn { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.5rem 1rem; cursor: pointer; border-radius: 2px; background: transparent; color: var(--muted); border: 1px solid var(--border); transition: all 0.15s; }
+  .print-btn:hover { color: var(--text); border-color: var(--muted); }
   #export-btn:hover { opacity: 0.75; }
   #refresh-btn { background: var(--surface2); color: var(--muted); border: 1px solid var(--border); }
   #refresh-btn:hover { color: var(--text); border-color: var(--muted); }
@@ -105,6 +126,16 @@
   #live-status { font-size: 0.65rem; color: var(--green); display: none; margin-top: 2px; }
 
 
+  /* Completed tab */
+  #completed-wrap { padding: 1.5rem 2.5rem 3rem; overflow-x: auto; display: none; }
+  #completed-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; }
+  #completed-table thead tr { background: var(--surface2); border-bottom: 2px solid var(--border); }
+  #completed-table th { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); padding: 0.6rem 0.8rem; text-align: left; white-space: nowrap; }
+  #completed-table td { padding: 0.45rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.03); white-space: nowrap; background: var(--done-bg); color: var(--muted); }
+  #completed-table .part-id { font-weight: 500; color: var(--text); }
+  #completed-table .num-cell { text-align: center; }
+  .empty-done { text-align: center; padding: 3rem; color: var(--muted); font-size: 0.75rem; }
+
   /* Zero qty section */
   #zero-section { padding: 0 2.5rem 3rem; display: none; }
   .zero-heading {
@@ -115,23 +146,29 @@
   }
   .zero-heading::after { content: ''; flex: 1; height: 1px; background: var(--border); }
   .zero-count { font-family: 'IBM Plex Mono', monospace; font-weight: 400; color: var(--border); font-size: 0.65rem; }
-  #zero-table { width: 100%; border-collapse: collapse; font-size: 0.68rem; opacity: 0.45; }
-  #zero-table td { padding: 0.35rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.02); white-space: nowrap; color: var(--muted); }
+  #zero-table { width: 100%; border-collapse: collapse; font-size: 0.68rem; opacity: 0.75; }
+  #zero-table td { padding: 0.35rem 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); white-space: nowrap; color: #b0b3c1; }
   #zero-table tr:hover td { opacity: 0.7; }
   #zero-table .part-id { font-weight: 500; color: var(--text); }
   #zero-table .num-cell { text-align: center; }
   .zero-badge { display: inline-block; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.55rem; padding: 1px 6px; border-radius: 2px; color: var(--muted); border: 1px solid var(--border); }
 
   @media print {
-    body { background: white; color: black; }
-    header, #stats-bar, #actions-bar { display: none !important; }
+    @page { size: A4 landscape; margin: 0.5cm; }
+    body { background: white; color: black; font-size: 7pt; }
+    header, #stats-bar, #actions-bar, #tab-bar, #zero-section, #completed-wrap { display: none !important; }
     #table-wrap { display: block !important; padding: 0; }
-    table { font-size: 8pt; }
-    th { color: #333 !important; background: #eee !important; }
-    tr.rank1 td { background: #fce4d6 !important; }
-    tr.rank2 td { background: #ddeeff !important; }
+    #print-header { display: block !important; font-family: Arial, sans-serif; font-size: 9pt; font-weight: bold; margin-bottom: 6px; }
+    table { font-size: 7pt; width: 100%; table-layout: fixed; }
+    th { color: #333 !important; background: #ddd !important; font-size: 7pt; padding: 3px 5px !important; }
+    td { padding: 2px 5px !important; font-size: 7pt; }
+    tr.rank1 td { background: #fce4d6 !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    tr.rank2 td { background: #ddeeff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     tr.completed { display: none; }
     .tick-cell { display: none; }
+    .badge { color: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .badge-1 { background: #c00000 !important; }
+    .badge-2 { background: #2f75b6 !important; }
   }
 </style>
 </head>
@@ -163,6 +200,11 @@
   <div class="stat"><span class="stat-label">Completed Today</span><span class="stat-value done" id="stat-done">0</span></div>
 </div>
 
+<div id="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('main', this)">Priority List <span class="tab-count" id="tab-count-main">0</span></button>
+  <button class="tab-btn tab-done" onclick="switchTab('done', this)">Completed Today <span class="tab-count" id="tab-count-done">0</span></button>
+</div>
+
 <div id="actions-bar">
   <input id="search-input" type="search" placeholder="Search Part ID or team..." oninput="renderTable()"/>
   <div class="dept-filters">
@@ -174,10 +216,14 @@
   <button id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
   <button id="export-btn" onclick="exportXLSX()">Export to Excel</button>
   <button id="reset-btn" onclick="resetTicks()">Reset All Ticks</button>
+  <button class="print-btn" onclick="printList('all')">🖨 Print All</button>
+  <button class="print-btn" onclick="printList('RC DCD')">🖨 RC DCD</button>
+  <button class="print-btn" onclick="printList('RC MCD')">🖨 RC MCD</button>
   <span id="row-count"></span>
 </div>
 
 <div id="table-wrap">
+  <div id="print-header" style="display:none;"></div>
   <table>
     <thead>
       <tr>
@@ -200,6 +246,24 @@
   <div class="zero-heading">No Quantity <span class="zero-count" id="zero-count"></span></div>
   <table id="zero-table">
     <tbody id="zero-body"></tbody>
+  </table>
+</div>
+
+<div id="completed-wrap">
+  <table id="completed-table">
+    <thead>
+      <tr>
+        <th>Priority</th>
+        <th>Part ID</th>
+        <th>Team</th>
+        <th class="num-cell">Ticked</th>
+        <th class="num-cell">Original Orders</th>
+        <th class="num-cell">Original Qty</th>
+        <th class="num-cell">Class</th>
+        <th class="num-cell">Value</th>
+      </tr>
+    </thead>
+    <tbody id="completed-body"></tbody>
   </table>
 </div>
 
@@ -227,7 +291,7 @@ const TICKS_REF = db.ref(`ticks/${TODAY}`);
 
 const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG59-BNC","ADP-ISC-QMS","AP-UNIFI-NANO-HD","ASW-AP-CIS-MER-CW9162","ASW-AP-CIS-MER-MR44","ASW-CAB-WIN-BA92","ASW-CAM-MOT-VB400V3","ASW-CHG-DOCK-VB400","ASW-CON-CASE-TC26","ASW-CON-SCR-PROT-TC26","ASW-DOCK-CON-DC200","ASW-HHT-ZEB-TC22","ASW-HHT-ZEB-TC27","ASW-HHT-ZEBRA-TC26","ASW-IPAD-GEN9-64GB","ASW-IPAD-RUGGED-CASE","ASW-PHONE-YEALINK-W73P","ASW-SCN-DAT-QD2450","ASW-SCN-MAG-1500I","ASW-SCN-NLSHR3280-PHM","ASW-ZEB-TC52-HHT","ASW-ZEB-TC52-HHT-DC","ATM-32-LGT-BD-MK2","ATM-32-REAR-FAN","ATT-WAIT-LOCK-BA83","BEA-PSU-VER-VX680","BG-SCN-OXH-BC361","BOA-SCN-DAT-3200VSI","BOA-SCN-DAT-3300HSI","CAB-CBNA-UO1-S07ZA","CAB-DAT-EAS","CAB-DIGI-CAB65200","CAB-DPORT-DPORT","CAB-HHP-XEN-1900-USB","CAB-HON-1450G","CAB-HON-7120-USB","CAB-HR2260-USB","CAB-MET-STD-RS232","CAB-MOT-U21-S07ZAR","CAB-SCN-9800-12V-USB","CAB-SCN-DATA-RS232","CAB-SCN-MAG-1500I","CAB-SYM-25-32469-20","CAB-SYM-DS4208","CAB-SYM-STI85-0200","CAM-BOBA-CAM-GRY","CAM-BOBA-CAMERA","CAM-BOBA-SENSOR","CC-SCN-ZEB-DS2208","CCTV-PSU-24V","CDR-ANK-08512-INSERT","CDR-DIG-EC410-INSERT","CDR-FT-EUMOD460-INS","CDR-FT-MOD460-INSERT","CDR-J2-INSERT","CDR-MAT-EP107-INSERT","CDR-MSC5099-INSERT","CDR-SL2000-INSERT","CDR-STD2000-INSERT","CDR-TEC-51A-INSERT","CEC-CAB-521-USB-BLK","CEC-CAB-PWR-KET-STD","CEC-CRA-HHT-5SLOT-TC51","CEC-CRA-HHT-ZEB-TC51","CEC-HHT-ZEB-TC51","CEC-PSU-KRO-TIME-CLO","CEC-PSU-M900-65W","CEC-PSU-M900-90W","CEC-PSU-VER-P400","CEC-PTR-AVERY-9417","CEC-PTR-AVERY-9418","CEC-PTR-PAXAR-9486","CEC-SCN-STAND","CEC-STD-FP-READER","CEC-TAB-ZEB-ET40-10IN","CLK-IPAD-10-64GB","CLK-IPHONE-14-128GB","CLK-PHONE-YL-W56H","CLK-PSU-APG-CDR","CLK-PSU-CIS-MX68","CLK-PSU-PS170","CON-CDR-3S-423-INS","CON-MO-USB-BLK","CON-PC-EPS-IM700-SCR","CON-POLE-YUNO-CW","CON-SPACE-2POLE","CON-VER-P400-MGRP-BLK","COS-CAB-DS457-USB","COS-CAB-DS9208-USB","COS-CAB-USB-A-MINI-B","COS-CDR-C4141B-INSERT","COS-CON-BAT-T470","COS-MSR-MS-GO2","COS-PLT-DS9208","COS-PSU-MIC-GO","COS-PSU-MS-SURFACE-PRO","COS-PSU-VX820-9V","COS-SCN-BC361-USB","COS-SCN-DAT-4400","COS-SCN-DS457-USB","COS-SCN-DS9208-USB","COS-SCN-NWL-USB","COS-TAB-CASE-MS-GO2","COS-TAB-EASEL-GO2","COS-TAB-MIC-COMPLIANCE","COS-TAB-PCLIP","COS-TAB-SCR-PROT","COS-TAB-SHLD-STRP","COS-TAB-TYP-COVER","COS-TAB-UAG-COVER","CRA-SYM-MC3000-USB","CRA-TOSH-TEC-EP800","CRA-VOC-CR-RK-S5","CRA-VOC-S5-REG","CRA-VOC-S5-STD","CRA-ZEB-TC57-LID","CRA-ZEB-TC58-LID","FH-AP-MER-MR33","HBS-SCN-HON-1450G","HOB-CRA-CAS-S1F2-BASE","HOB-PSU-VER-V400M","HSM-POS-SCANNER","HTS-DS-ALL-WS37HD8","HTS-DS-AND-PPCNET-D","HTS-SCN-HON-BO","HTS-SCN-HON-POS","HWS-ITSU-240-PED-PSU","HWS-ITSU-FLY-MON-PSU","HWS-KBD-MOU-WIRELESS","HWS-PZH-12V-150W-12.5A-PSU","HWS-PZH-12V-7AMP-CLO22-PSU","HWS-PZH-AP-DRAY-1060","HWS-PZH-AP-DRAY-912C","HWS-PZH-CAB-EURO-ELKTX","HWS-PZH-CHRM-BK-N23-PSU","HWS-PZH-PSU-LEN","KBD-ACC-5010","KBD-ACC-596-MINI","KBD-ACC-KYB500-K82B","KBD-ACK-540RF","KBD-AKE-OCU-741","KBD-CHY-GB81-MY700","KBD-CHY-SPOS-G86-624","KBD-HP-FK218AA","KBD-KEY-ACK-340-PS2","KBD-MOU-HP-230","KBD-MOU-HP-235","KBD-PS2-MINI-BLK","KBD-USB-BLK","KBD-USB-MINI-BLK","KBD-USB-MINI-CRM","LIB-SCN-HON-XEN-1950","LID-ADP-ISC-QMS","LID-CIS-ATA-192","LID-CRA-DESK-UTMB5","LID-CRA-PAN-UTMB5","LID-FREDERIX-HOTSPOT","LID-PAN-MNT-UTMB5","LID-SMC-ISC-V2.1","LID-SU-AP-HUA-5760-51","LID-TAB-PAN-UTMB5","LYD-AAH-PAP-BRO-HL6400DW","LYD-AAH-TRAY-BRO-LT6505","LYD-E-CAB-U21-S07ZAR","LYD-E-CDU-HP-LD220","LYD-E-CRA-8800-HHT","LYD-E-CRA-SYM-MC3190","LYD-E-KBD-ACK-540U","LYD-E-PSU-8800-HHT","LYD-E-SCN-MOT-DS9208","MCD-BAT-QUA-PRO9","MCD-BSE-NEX-7000-KIT","MCD-BSE-QUA-DT","MCD-BSE-QUA-DUAL-V2","MCD-CAB-PWR-SPLIT-DTSV2","MCD-CASE-NEX-7007","MCD-DOCK-QUA-8PORT","MCD-DT-AU-3M-BSE-5.20X2-KIT","MCD-DT-AU-3M-BSE-526-KIT","MCD-DT-AU-3M-BSE-KIT","MCD-DT-AU-3M-BSE-KIT-HS","MCD-DT-AU-3M-PAR-G5SPK-KIT","MCD-DT-AU-3M-SPK-MIC-KIT","MCD-DT-AU-3M-VENBSE-KIT","MCD-DT-AU-HME-BAT-KIT","MCD-DT-AU-HME-BSE6200-KIT","MCD-DT-AU-HME-MIC-KIT","MCD-DT-AU-HME-PCB-6200","MCD-DT-AU-HME-SPK-KIT","MCD-DT-AU-PAR-G5PLUS-KIT","MCD-DT-AU-PCB-LOOPCARD","MCD-DT-GATEWAY-DX80-KIT","MCD-DT-PUCK-DX80-KIT","MCD-DT-QUAIL-EXTBOX","MCD-DT-RGAGE-RADR-KIT","MCD-DT-SOTEC-CLOUD-KIT","MCD-HDSET-3M-KIT","MCD-HEAD-3M-12SLOT-CHARGER","MCD-HEAD-3M-CHARGER","MCD-HME-FOAM","MCD-HSET-QUA","MCD-KIT-HSET-HS6200","MCD-KIT-NEX-HSET-7002","MCD-KSK-EURO-SCN-MX101-KIT","MCD-KSK-EVOK-SCANCASE-KIT","MCD-KSK-EVOK-SCN-4400-KIT","MCD-KSK-NGK-SCN-N5680-KIT","MCD-MIC-QUA","MCD-NEX-BAT-DOCK","MCD-PUCK-DHOUS-KIT","MCD-PUCK-DTSV2-KIT","MCD-RADR-DTSV2-KIT","MCD-RPTR-QUA","MCD-SCN-ACR-NGK27-KIT","MCD-SCN-DS547-4407-3207","MCD-SCN-ZEB-MD27-KIT","MCD-SPK-NEX-7000","MCD-SPK-QUA","MCD-TRANS-NEX-7000","MED-INTEL-STICK","MNT-DBLD-SCO","MOD-DYNALINK-56K-PCI","MW-SCN-HP-6Y2V4AA","NAN-DS-HKV-DS-D60C-B","NAN-DS-INT-STK1AW32SC","NHS-SCN-DAT-QD2430","NT-BAT-DELL-LAT-5175","NT-BAT-DELL-VEN11","NT-BAT-R11-DUR","NT-DOCK-DELL","NT-DOCK-DURABOOK-R11","NT-DURABOOK-PSU","NT-PSU-DELL-DOCK","NT-PSU-PS-180","NWK-VOC-BSE-STN","NXT-CAB-HON-7580G-USB","NXT-CRA-HON-1902H","NXT-SCN-HON-1902","NXT-SCN-HON-USB-7580G","NXT-SCN-ZEB-RFD8500","ODE-BAT-APC-SMX3000","ODE-CAB-LED-10SQ","ODE-DOCK-HDD-TS-231P","ODE-DOCK-QN-TS431XEU","OFC-SCN-CIP-1100","OFC-SCN-DAT-HD3130","OST-BAT-ZEB-TC52-PKR","OST-CDR-INSERT-DGRY","OST-CRA-HHT-ZEB-TC51","OST-CRA-ZEB-TC52-HHT","OST-CRA-ZEB-TC52-PKR","OST-CRA-ZEB-TC53E","OST-HHT-ZEB-TC51","OST-HHT-ZEB-TC52","OST-HHT-ZEB-TC52-PKR","OST-HHT-ZEB-TC53E","OST-HHT-ZEB-TC77-WH","OST-PSU-CRA-HHT","OST-PTR-HP-TRAY2","OST-SCN-ZEB-RS5000X-WH","OST-TAB-ZEB-WT6400-WH","PAD-BPS-GAS-STRUT","PAD-BPS-SWITCH-DOOR","PAD-NV200-NOTE-READER-BPS","PAD-PHONE-YEALINK-W53P","PAD-SCN-GEWE-FM3080","PAD-SCN-HON-MS9520","PAD-SCN-NLS-FM100","PAD-SCN-NLS-FM3051","PAD-SCN-NLS-FM3080","PH8-SCN-MOT-DS9208","PHONE-BT-DUET-210","PLP-HON-SCN-HF561SR","PS-USA-POS-SCAN-BDL","RI-CAB-SCN-DS8108","RI-SCN-ZEB-DS8108","RI-SCO-ELO-SCANNER2D","RI-SCO-KEONN-ADVANGO","RI-SCO-KEONN-ADVANPAY-120","SCN-CAN-LIDE110","SCN-DAT-3300-MUL","SCN-DAT-GFS4400","SCN-DAT-MAG-8001","SCN-DATA-3450VSI","SCN-DOC-CAN-LIDE300","SCN-DOR-HR2260-HOLDER","SCN-DORA-HR2300-2D","SCN-DORADA-HR2260-2D","SCN-HHP-1300G","SCN-HHP-3800G04E","SCN-HHP-XEN-1900-USB","SCN-HON-MS9540-USB","SCN-HP-1RL97AA","SCN-HP-BW868AA","SCN-HP-BW868AA-STND","SCN-HP-ENG-1-STND","SCN-MAG-1500I-BLK","SCN-MAG-M1500-I","SCN-MET-3780-USB-BLK","SCN-MET-7120-RS2-BLK","SCN-MET-7120-USB-BLK","SCN-MET-9520-KBW-BLK","SCN-MET-9520-KBW-CRM","SCN-MET-9520-USB-BLK","SCN-MET-9520-USB-CRM","SCN-MET-9540-USB-BLK","SCN-MET-QUANTUM-USB","SCN-MOT-DS4308-USB","SCN-MOT-DS457-USB","SCN-MOT-DS9208-USB","SCN-QUANTUM-STAND","SCN-SU-SYM-LS9208-LON","SCN-SYM-DS4208","SCN-SYM-LS9100-400BC","SCN-SYM-LS9208-LON","SCN-UNI-MS320-1G","SCN-ZEB-DS9208-BLK","SCN-ZEB-DS9308-USB","SDR-SCN-ZEB-RFD8500","SDR-TAB-IPHONE-SE","SDR-TAB-IPOD-TCH","SDR-ZEB-CHG-CRA","SDY-SCN-RFID","SEL-CAB-CRA-M-INT433","SEL-CRA-DAT-M-INT433","SEL-SCN-DAT-PM9500","SEL-SCN-DAT-PM9501","SEL-SCN-DS4208-USB","SEL-SCN-MET-9540-USB","SHO-SCN-DS9208-USB","SIG-CRA-VX680","SPK-VOC-HDSET-S5","SUP-CAB-NLSHR22-USB","SUP-HHT-ZEBRA-TC26-PSL","SUP-SCN-HHT-ZEB-TC51","SUP-SU-SCN-DS9208-EAS","SVR-VOC-CTRLR","THR-BAT-SYM-CS4070","THR-CAB-IPAD-CHARGE-BLK","THR-CAB-SYM-CS4070","THR-CAB-ZEB-CS4070","THR-CON-CS4070-LANYARD","THR-DOCK-CHARGE-6080","THR-DOCK-CHARGE-CS4070","THR-DOCK-CHG-CUP-6080","THR-IPAD-AIR-4TH","THR-IPAD-RUGGED-CASE","THR-SCN-SYM-CS4070","THR-SCN-ZEB-CS6080","TPRG-SCN-DS2208-SR","TPS-CAB-SCN-DS9308","TPS-CRA-TC51","TPS-SCN-DS9208-SR2D","TPS-SCN-ZEB-DS9308","TRG-BAT-ZEB-HHT","TRG-CASE-SAM-A8-10.5IN","TRG-CRA-SYM-MC40-5SLOT","TRG-CRA-VX680","TRG-CRA-ZEB-BAT-4SLOT","TRG-CRA-ZEB-HHT-BAT-4SLOT","TRG-CRA-ZEB-TC52-5SLOT","TRG-HHT-ZEB-TC22","TRG-HHT-ZEB-TC52","TRG-MON-HP-E22-G5-22IN","TRG-PHONE-BT-DECT","TRG-SCN-SYM-DS9208","TRG-SCN-ZEB-DS9308","TRG-TAB-IPAD-MINI-A2124","TRG-TAB-IPAD-MINI-A2133","TRG-TAB-IPAD-MINI-A2567","TRG-TAB-IPAD-MINI-A2993","TRG-TAB-IPAD-MINI2","TRG-TAB-IPAD7-A2197","TRG-TAB-IPAD9-A2602","TRG-TAB-IPOD-TCH-6GEN","TRG-TAB-SAM-A8","TRG-TAB-SAM-A9-PLUS-64","TUI-LAP-DELL-WD19-DOCK","WHI-SCN-SYM-DS9208-USB","WHIT-MNT-TAB-DFWC-KIT","WHIT-SCN-WINCOR","WHIT-TAB-CSE-LEN-M10","WHIT-TAB-LEN-M10","YC-SCN-DS9208","YC-SCN-ZEB-DS9308"]);
 
-let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, showDone = true, deptFilter = 'all';
+let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, showDone = true, deptFilter = 'all', currentTab = 'main';
 
 document.getElementById('date-badge').textContent =
   new Date().toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
@@ -288,6 +352,13 @@ function getEffectiveRow(row) {
 function updateDoneCount() {
   const count = Object.values(ticks).reduce((sum, v) => sum + (typeof v === 'object' ? (v.count || 0) : (v ? 1 : 0)), 0);
   document.getElementById('stat-done').textContent = count;
+  // Update tab counts
+  const donePartsCount = outputRows.filter(r => getTickCount(r['Part ID']) > 0).length;
+  const mainCount = outputRows.length - donePartsCount;
+  document.getElementById('tab-count-main').textContent = outputRows.length;
+  document.getElementById('tab-count-done').textContent = donePartsCount;
+  // Refresh completed tab if active
+  if (currentTab === 'done') renderCompleted();
 }
 
 function toggleDone() {
@@ -423,6 +494,7 @@ async function loadAll() {
     document.getElementById('stat-total').textContent = outputRows.length;
     document.getElementById('loading-bar').style.display = 'none';
     document.getElementById('stats-bar').style.display = 'flex';
+    document.getElementById('tab-bar').style.display = 'flex';
     document.getElementById('actions-bar').style.display = 'flex';
     document.getElementById('table-wrap').style.display = 'block';
     document.getElementById('last-updated').style.display = 'block';
@@ -535,6 +607,72 @@ function renderTable() {
   } else {
     zeroSection.style.display = 'none';
   }
+}
+
+function printList(dept) {
+  // Set print header
+  const deptLabel = dept === 'all' ? 'All Departments' : dept;
+  const dateStr = new Date().toLocaleDateString('en-GB', {weekday:'long', day:'numeric', month:'long', year:'numeric'});
+  document.getElementById('print-header').textContent = `DCD Priority Work List — ${deptLabel} — ${dateStr}`;
+
+  // Temporarily filter table to selected dept
+  const prevFilter = deptFilter;
+  deptFilter = dept === 'all' ? 'all' : dept;
+  renderTable();
+
+  // Print
+  window.print();
+
+  // Restore previous filter
+  deptFilter = prevFilter;
+  renderTable();
+}
+
+function switchTab(tab, btn) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  if (tab === 'main') {
+    document.getElementById('actions-bar').style.display = 'flex';
+    document.getElementById('table-wrap').style.display = 'block';
+    document.getElementById('zero-section').style.display = outputRows.length ? 'block' : 'none';
+    document.getElementById('completed-wrap').style.display = 'none';
+  } else {
+    document.getElementById('actions-bar').style.display = 'none';
+    document.getElementById('table-wrap').style.display = 'none';
+    document.getElementById('zero-section').style.display = 'none';
+    document.getElementById('completed-wrap').style.display = 'block';
+    renderCompleted();
+  }
+}
+
+function renderCompleted() {
+  const tbody = document.getElementById('completed-body');
+  tbody.innerHTML = '';
+  const doneRows = outputRows.filter(r => getTickCount(r['Part ID']) > 0);
+
+  if (doneRows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-done">No parts completed yet today</td></tr>';
+    return;
+  }
+
+  doneRows.forEach(row => {
+    const tickCount = getTickCount(row['Part ID']);
+    const cls = row['Part Class'] || '';
+    const valStr = typeof row.Value === 'number' ? `£${row.Value.toFixed(2)}` : '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="badge badge-${row.Priority}">${row.Priority}</span></td>
+      <td class="part-id">${row['Part ID']}</td>
+      <td>${row['Repair Team'] || ''}</td>
+      <td class="num-cell" style="color:var(--green);font-weight:700;">${tickCount}</td>
+      <td class="num-cell">${row['Open Orders'] !== '' ? row['Open Orders'] : '—'}</td>
+      <td class="num-cell">${row['Total Qty'] !== '' ? row['Total Qty'] : '—'}</td>
+      <td class="num-cell grade-${cls}">${cls}</td>
+      <td class="num-cell">${valStr}</td>`;
+    tbody.appendChild(tr);
+  });
 }
 
 function setDept(dept, btn) {

@@ -528,15 +528,16 @@ function resetTicks() {
 }
 
 async function fetchFile(filename) {
-  // Try jsDelivr first, fallback to raw.githubusercontent
+  // Use cache-busting timestamp to always get latest file
+  const bust = Date.now();
   const urls = [
-    `https://cdn.jsdelivr.net/gh/NotKamran07/dcd-priority-list@main/${encodeURIComponent(filename)}`,
-    `https://raw.githubusercontent.com/NotKamran07/dcd-priority-list/main/${encodeURIComponent(filename)}`
+    `https://raw.githubusercontent.com/NotKamran07/dcd-priority-list/main/${encodeURIComponent(filename)}?t=${bust}`,
+    `https://cdn.jsdelivr.net/gh/NotKamran07/dcd-priority-list@main/${encodeURIComponent(filename)}?t=${bust}`
   ];
   
   for (const url of urls) {
     try {
-      const res = await fetch(url, { cache: 'no-cache' });
+      const res = await fetch(url, { cache: 'no-store' });
       if (res.ok) return await res.arrayBuffer();
     } catch(e) {
       continue;
@@ -731,7 +732,9 @@ async function loadAll() {
     Object.keys(boMap).forEach(id => {
       const bo = boMap[id], pbi = pbiMap[id] || { repReq: 0, totalBad: 0, team: '' };
       const cls = gradeMap[id] || '';
-      rank1.push({ Priority: 1, 'Part ID': id, 'Repair Team': pbi.team, 'Rep Req': pbi.repReq, 'Open Orders': bo.count, 'Total Qty': bo.totalQty, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
+      // Use PowerBI Total Bad for quantity — more accurate than summing backorder rows
+      const totalQty = pbi.totalBad > 0 ? pbi.totalBad : bo.totalQty;
+      rank1.push({ Priority: 1, 'Part ID': id, 'Repair Team': pbi.team, 'Rep Req': pbi.repReq, 'Open Orders': bo.count, 'Total Qty': totalQty, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
     });
     rank1.sort((a, b) => b['Open Orders'] - a['Open Orders']);
 

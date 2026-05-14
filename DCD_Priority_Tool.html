@@ -80,6 +80,8 @@
   }
   .tab-btn.active .tab-count { background: var(--accent); color: white; }
   .tab-btn.tab-done.active { border-bottom-color: var(--green); }
+  .tab-btn.tab-history.active { border-bottom-color: #a855f7; }
+  .tab-btn.tab-history.active .tab-count { background: #a855f7; }
   .tab-btn.tab-done.active .tab-count { background: var(--green); }
 
   #actions-bar { display: none; padding: 1rem 2.5rem; border-bottom: 1px solid var(--border); gap: 1rem; align-items: center; flex-wrap: wrap; }
@@ -181,6 +183,55 @@
   #zero-table .num-cell { text-align: center; }
   .zero-badge { display: inline-block; font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.55rem; padding: 1px 6px; border-radius: 2px; color: var(--muted); border: 1px solid var(--border); }
 
+  /* Add Part Modal */
+  #modal-overlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    z-index: 1000; align-items: center; justify-content: center;
+  }
+  #modal-overlay.open { display: flex; }
+  #modal-box {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+    padding: 1.5rem; width: 420px; max-width: 95vw;
+  }
+  #modal-box h2 { font-family: 'Syne', sans-serif; font-size: 1rem; font-weight: 700; margin-bottom: 1rem; }
+  #modal-box label { font-size: 0.68rem; color: var(--muted); display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.06em; }
+  #part-search-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 0.78rem;
+    padding: 0.5rem 0.8rem; border-radius: 3px; outline: none; margin-bottom: 0.5rem;
+  }
+  #part-search-input:focus { border-color: var(--muted); }
+  #part-dropdown {
+    width: 100%; max-height: 200px; overflow-y: auto;
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 3px; margin-bottom: 1rem; display: none;
+  }
+  .part-option {
+    padding: 0.4rem 0.8rem; font-size: 0.75rem; cursor: pointer;
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border);
+  }
+  .part-option:hover { background: var(--border); }
+  .part-option:last-child { border-bottom: none; }
+  .part-option-grade { font-size: 0.65rem; color: var(--muted); }
+  #modal-selected {
+    background: var(--surface2); border: 1px solid var(--border); border-radius: 3px;
+    padding: 0.6rem 0.8rem; font-size: 0.78rem; margin-bottom: 1rem;
+    display: none; justify-content: space-between; align-items: center;
+  }
+  #modal-selected .sel-id { font-weight: 700; }
+  #modal-selected .sel-info { font-size: 0.65rem; color: var(--muted); }
+  .modal-btns { display: flex; gap: 0.75rem; justify-content: flex-end; }
+  .modal-btns button {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem;
+    letter-spacing: 0.04em; text-transform: uppercase; padding: 0.5rem 1.2rem;
+    cursor: pointer; border-radius: 2px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--muted); transition: all 0.15s;
+  }
+  #modal-confirm { background: var(--green); color: white; border-color: var(--green); display: none; }
+  #modal-confirm:hover { opacity: 0.85; }
+  #modal-cancel:hover { color: var(--text); border-color: var(--muted); }
+
   @media print {
     @page { size: A4 landscape; margin: 0.3cm; }
     * { box-sizing: border-box; }
@@ -243,6 +294,7 @@
 <div id="tab-bar">
   <button class="tab-btn active" onclick="switchTab('main', this)">Priority List <span class="tab-count" id="tab-count-main">0</span></button>
   <button class="tab-btn tab-done" onclick="switchTab('done', this)">Completed Today <span class="tab-count" id="tab-count-done">0</span></button>
+  <button class="tab-btn tab-history" onclick="switchTab('history', this)">Total Parts Completed <span class="tab-count" id="tab-count-history">0</span></button>
 </div>
 
 <div id="actions-bar">
@@ -256,6 +308,7 @@
   <button id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
   <button id="export-btn" onclick="exportXLSX()">Export to Excel</button>
   <button id="reset-btn" onclick="resetTicks()">Reset All Ticks</button>
+  <button id="add-part-btn" onclick="openModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);transition:opacity 0.2s;">+ Add Part</button>
   <button class="print-btn" onclick="printList('all')">🖨 Print All</button>
   <button class="print-btn" onclick="printList('RC DCD')">🖨 RC DCD</button>
   <button class="print-btn" onclick="printList('RC MCD')">🖨 RC MCD</button>
@@ -322,6 +375,49 @@
   </table>
 </div>
 
+<!-- History Tab -->
+<div id="history-wrap" style="display:none; padding:1.5rem 2.5rem 3rem;">
+  <div id="history-summary" style="display:flex; gap:2.5rem; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--border); padding-bottom:1.5rem; margin-bottom:1.5rem;">
+    <div class="stat"><span class="stat-label">All-Time Parts</span><span class="stat-value" id="hist-total-parts" style="color:#a855f7;">0</span></div>
+    <div class="stat"><span class="stat-label">All-Time Repairs</span><span class="stat-value" id="hist-total-repairs" style="color:var(--text);">0</span></div>
+    <div class="stat"><span class="stat-label">All-Time Earned</span><span class="stat-value" id="hist-total-earned" style="color:var(--green);">£0.00</span></div>
+    <button onclick="clearHistory()" style="margin-left:auto;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Clear History</button>
+  </div>
+  <table style="width:100%;border-collapse:collapse;font-size:0.72rem;">
+    <thead>
+      <tr style="background:var(--surface2);border-bottom:2px solid var(--border);">
+        <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:left;">Date</th>
+        <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:left;">Part ID</th>
+        <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Repairs</th>
+        <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Class</th>
+        <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Value</th>
+        <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Earned</th>
+      </tr>
+    </thead>
+    <tbody id="history-body"></tbody>
+  </table>
+</div>
+
+<!-- Add Part Modal -->
+<div id="modal-overlay">
+  <div id="modal-box">
+    <h2>Add Part Manually</h2>
+    <label>Search Part ID</label>
+    <input id="part-search-input" type="search" placeholder="Type to search..." oninput="searchParts(this.value)" autocomplete="off"/>
+    <div id="part-dropdown"></div>
+    <div id="modal-selected">
+      <div>
+        <div class="sel-id" id="sel-part-id">—</div>
+        <div class="sel-info" id="sel-part-info">—</div>
+      </div>
+    </div>
+    <div class="modal-btns">
+      <button id="modal-cancel" onclick="closeModal()">Cancel</button>
+      <button id="modal-confirm" onclick="confirmAddPart()">Add Part</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // Firebase config
 const firebaseConfig = {
@@ -343,6 +439,7 @@ const RAW = `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}`;
 const GRADE_VALUE = { A: 0.10, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
 const TODAY = new Date().toISOString().slice(0, 10);
 const TICKS_REF = db.ref(`ticks/${TODAY}`);
+const HISTORY_REF = db.ref('history');
 
 const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG59-BNC","ADP-ISC-QMS","AP-UNIFI-NANO-HD","ASW-AP-CIS-MER-CW9162","ASW-AP-CIS-MER-MR44","ASW-CAB-WIN-BA92","ASW-CAM-MOT-VB400V3","ASW-CHG-DOCK-VB400","ASW-CON-CASE-TC26","ASW-CON-SCR-PROT-TC26","ASW-DOCK-CON-DC200","ASW-HHT-ZEB-TC22","ASW-HHT-ZEB-TC27","ASW-HHT-ZEBRA-TC26","ASW-IPAD-GEN9-64GB","ASW-IPAD-RUGGED-CASE","ASW-PHONE-YEALINK-W73P","ASW-SCN-DAT-QD2450","ASW-SCN-MAG-1500I","ASW-SCN-NLSHR3280-PHM","ASW-ZEB-TC52-HHT","ASW-ZEB-TC52-HHT-DC","ATM-32-LGT-BD-MK2","ATM-32-REAR-FAN","ATT-WAIT-LOCK-BA83","BEA-PSU-VER-VX680","BG-SCN-OXH-BC361","BOA-SCN-DAT-3200VSI","BOA-SCN-DAT-3300HSI","CAB-CBNA-UO1-S07ZA","CAB-DAT-EAS","CAB-DIGI-CAB65200","CAB-DPORT-DPORT","CAB-HHP-XEN-1900-USB","CAB-HON-1450G","CAB-HON-7120-USB","CAB-HR2260-USB","CAB-MET-STD-RS232","CAB-MOT-U21-S07ZAR","CAB-SCN-9800-12V-USB","CAB-SCN-DATA-RS232","CAB-SCN-MAG-1500I","CAB-SYM-25-32469-20","CAB-SYM-DS4208","CAB-SYM-STI85-0200","CAM-BOBA-CAM-GRY","CAM-BOBA-CAMERA","CAM-BOBA-SENSOR","CC-SCN-ZEB-DS2208","CCTV-PSU-24V","CDR-ANK-08512-INSERT","CDR-DIG-EC410-INSERT","CDR-FT-EUMOD460-INS","CDR-FT-MOD460-INSERT","CDR-J2-INSERT","CDR-MAT-EP107-INSERT","CDR-MSC5099-INSERT","CDR-SL2000-INSERT","CDR-STD2000-INSERT","CDR-TEC-51A-INSERT","CEC-CAB-521-USB-BLK","CEC-CAB-PWR-KET-STD","CEC-CRA-HHT-5SLOT-TC51","CEC-CRA-HHT-ZEB-TC51","CEC-HHT-ZEB-TC51","CEC-PSU-KRO-TIME-CLO","CEC-PSU-M900-65W","CEC-PSU-M900-90W","CEC-PSU-VER-P400","CEC-PTR-AVERY-9417","CEC-PTR-AVERY-9418","CEC-PTR-PAXAR-9486","CEC-SCN-STAND","CEC-STD-FP-READER","CEC-TAB-ZEB-ET40-10IN","CLK-IPAD-10-64GB","CLK-IPHONE-14-128GB","CLK-PHONE-YL-W56H","CLK-PSU-APG-CDR","CLK-PSU-CIS-MX68","CLK-PSU-PS170","CON-CDR-3S-423-INS","CON-MO-USB-BLK","CON-PC-EPS-IM700-SCR","CON-POLE-YUNO-CW","CON-SPACE-2POLE","CON-VER-P400-MGRP-BLK","COS-CAB-DS457-USB","COS-CAB-DS9208-USB","COS-CAB-USB-A-MINI-B","COS-CDR-C4141B-INSERT","COS-CON-BAT-T470","COS-MSR-MS-GO2","COS-PLT-DS9208","COS-PSU-MIC-GO","COS-PSU-MS-SURFACE-PRO","COS-PSU-VX820-9V","COS-SCN-BC361-USB","COS-SCN-DAT-4400","COS-SCN-DS457-USB","COS-SCN-DS9208-USB","COS-SCN-NWL-USB","COS-TAB-CASE-MS-GO2","COS-TAB-EASEL-GO2","COS-TAB-MIC-COMPLIANCE","COS-TAB-PCLIP","COS-TAB-SCR-PROT","COS-TAB-SHLD-STRP","COS-TAB-TYP-COVER","COS-TAB-UAG-COVER","CRA-SYM-MC3000-USB","CRA-TOSH-TEC-EP800","CRA-VOC-CR-RK-S5","CRA-VOC-S5-REG","CRA-VOC-S5-STD","CRA-ZEB-TC57-LID","CRA-ZEB-TC58-LID","FH-AP-MER-MR33","HBS-SCN-HON-1450G","HOB-CRA-CAS-S1F2-BASE","HOB-PSU-VER-V400M","HSM-POS-SCANNER","HTS-DS-ALL-WS37HD8","HTS-DS-AND-PPCNET-D","HTS-SCN-HON-BO","HTS-SCN-HON-POS","HWS-ITSU-240-PED-PSU","HWS-ITSU-FLY-MON-PSU","HWS-KBD-MOU-WIRELESS","HWS-PZH-12V-150W-12.5A-PSU","HWS-PZH-12V-7AMP-CLO22-PSU","HWS-PZH-AP-DRAY-1060","HWS-PZH-AP-DRAY-912C","HWS-PZH-CAB-EURO-ELKTX","HWS-PZH-CHRM-BK-N23-PSU","HWS-PZH-PSU-LEN","KBD-ACC-5010","KBD-ACC-596-MINI","KBD-ACC-KYB500-K82B","KBD-ACK-540RF","KBD-AKE-OCU-741","KBD-CHY-GB81-MY700","KBD-CHY-SPOS-G86-624","KBD-HP-FK218AA","KBD-KEY-ACK-340-PS2","KBD-MOU-HP-230","KBD-MOU-HP-235","KBD-PS2-MINI-BLK","KBD-USB-BLK","KBD-USB-MINI-BLK","KBD-USB-MINI-CRM","LIB-SCN-HON-XEN-1950","LID-ADP-ISC-QMS","LID-CIS-ATA-192","LID-CRA-DESK-UTMB5","LID-CRA-PAN-UTMB5","LID-FREDERIX-HOTSPOT","LID-PAN-MNT-UTMB5","LID-SMC-ISC-V2.1","LID-SU-AP-HUA-5760-51","LID-TAB-PAN-UTMB5","LYD-AAH-PAP-BRO-HL6400DW","LYD-AAH-TRAY-BRO-LT6505","LYD-E-CAB-U21-S07ZAR","LYD-E-CDU-HP-LD220","LYD-E-CRA-8800-HHT","LYD-E-CRA-SYM-MC3190","LYD-E-KBD-ACK-540U","LYD-E-PSU-8800-HHT","LYD-E-SCN-MOT-DS9208","MCD-BAT-QUA-PRO9","MCD-BSE-NEX-7000-KIT","MCD-BSE-QUA-DT","MCD-BSE-QUA-DUAL-V2","MCD-CAB-PWR-SPLIT-DTSV2","MCD-CASE-NEX-7007","MCD-DOCK-QUA-8PORT","MCD-DT-AU-3M-BSE-5.20X2-KIT","MCD-DT-AU-3M-BSE-526-KIT","MCD-DT-AU-3M-BSE-KIT","MCD-DT-AU-3M-BSE-KIT-HS","MCD-DT-AU-3M-PAR-G5SPK-KIT","MCD-DT-AU-3M-SPK-MIC-KIT","MCD-DT-AU-3M-VENBSE-KIT","MCD-DT-AU-HME-BAT-KIT","MCD-DT-AU-HME-BSE6200-KIT","MCD-DT-AU-HME-MIC-KIT","MCD-DT-AU-HME-PCB-6200","MCD-DT-AU-HME-SPK-KIT","MCD-DT-AU-PAR-G5PLUS-KIT","MCD-DT-AU-PCB-LOOPCARD","MCD-DT-GATEWAY-DX80-KIT","MCD-DT-PUCK-DX80-KIT","MCD-DT-QUAIL-EXTBOX","MCD-DT-RGAGE-RADR-KIT","MCD-DT-SOTEC-CLOUD-KIT","MCD-HDSET-3M-KIT","MCD-HEAD-3M-12SLOT-CHARGER","MCD-HEAD-3M-CHARGER","MCD-HME-FOAM","MCD-HSET-QUA","MCD-KIT-HSET-HS6200","MCD-KIT-NEX-HSET-7002","MCD-KSK-EURO-SCN-MX101-KIT","MCD-KSK-EVOK-SCANCASE-KIT","MCD-KSK-EVOK-SCN-4400-KIT","MCD-KSK-NGK-SCN-N5680-KIT","MCD-MIC-QUA","MCD-NEX-BAT-DOCK","MCD-PUCK-DHOUS-KIT","MCD-PUCK-DTSV2-KIT","MCD-RADR-DTSV2-KIT","MCD-RPTR-QUA","MCD-SCN-ACR-NGK27-KIT","MCD-SCN-DS547-4407-3207","MCD-SCN-ZEB-MD27-KIT","MCD-SPK-NEX-7000","MCD-SPK-QUA","MCD-TRANS-NEX-7000","MED-INTEL-STICK","MNT-DBLD-SCO","MOD-DYNALINK-56K-PCI","MW-SCN-HP-6Y2V4AA","NAN-DS-HKV-DS-D60C-B","NAN-DS-INT-STK1AW32SC","NHS-SCN-DAT-QD2430","NT-BAT-DELL-LAT-5175","NT-BAT-DELL-VEN11","NT-BAT-R11-DUR","NT-DOCK-DELL","NT-DOCK-DURABOOK-R11","NT-DURABOOK-PSU","NT-PSU-DELL-DOCK","NT-PSU-PS-180","NWK-VOC-BSE-STN","NXT-CAB-HON-7580G-USB","NXT-CRA-HON-1902H","NXT-SCN-HON-1902","NXT-SCN-HON-USB-7580G","NXT-SCN-ZEB-RFD8500","ODE-BAT-APC-SMX3000","ODE-CAB-LED-10SQ","ODE-DOCK-HDD-TS-231P","ODE-DOCK-QN-TS431XEU","OFC-SCN-CIP-1100","OFC-SCN-DAT-HD3130","OST-BAT-ZEB-TC52-PKR","OST-CDR-INSERT-DGRY","OST-CRA-HHT-ZEB-TC51","OST-CRA-ZEB-TC52-HHT","OST-CRA-ZEB-TC52-PKR","OST-CRA-ZEB-TC53E","OST-HHT-ZEB-TC51","OST-HHT-ZEB-TC52","OST-HHT-ZEB-TC52-PKR","OST-HHT-ZEB-TC53E","OST-HHT-ZEB-TC77-WH","OST-PSU-CRA-HHT","OST-PTR-HP-TRAY2","OST-SCN-ZEB-RS5000X-WH","OST-TAB-ZEB-WT6400-WH","PAD-BPS-GAS-STRUT","PAD-BPS-SWITCH-DOOR","PAD-NV200-NOTE-READER-BPS","PAD-PHONE-YEALINK-W53P","PAD-SCN-GEWE-FM3080","PAD-SCN-HON-MS9520","PAD-SCN-NLS-FM100","PAD-SCN-NLS-FM3051","PAD-SCN-NLS-FM3080","PH8-SCN-MOT-DS9208","PHONE-BT-DUET-210","PLP-HON-SCN-HF561SR","PS-USA-POS-SCAN-BDL","RI-CAB-SCN-DS8108","RI-SCN-ZEB-DS8108","RI-SCO-ELO-SCANNER2D","RI-SCO-KEONN-ADVANGO","RI-SCO-KEONN-ADVANPAY-120","SCN-CAN-LIDE110","SCN-DAT-3300-MUL","SCN-DAT-GFS4400","SCN-DAT-MAG-8001","SCN-DATA-3450VSI","SCN-DOC-CAN-LIDE300","SCN-DOR-HR2260-HOLDER","SCN-DORA-HR2300-2D","SCN-DORADA-HR2260-2D","SCN-HHP-1300G","SCN-HHP-3800G04E","SCN-HHP-XEN-1900-USB","SCN-HON-MS9540-USB","SCN-HP-1RL97AA","SCN-HP-BW868AA","SCN-HP-BW868AA-STND","SCN-HP-ENG-1-STND","SCN-MAG-1500I-BLK","SCN-MAG-M1500-I","SCN-MET-3780-USB-BLK","SCN-MET-7120-RS2-BLK","SCN-MET-7120-USB-BLK","SCN-MET-9520-KBW-BLK","SCN-MET-9520-KBW-CRM","SCN-MET-9520-USB-BLK","SCN-MET-9520-USB-CRM","SCN-MET-9540-USB-BLK","SCN-MET-QUANTUM-USB","SCN-MOT-DS4308-USB","SCN-MOT-DS457-USB","SCN-MOT-DS9208-USB","SCN-QUANTUM-STAND","SCN-SU-SYM-LS9208-LON","SCN-SYM-DS4208","SCN-SYM-LS9100-400BC","SCN-SYM-LS9208-LON","SCN-UNI-MS320-1G","SCN-ZEB-DS9208-BLK","SCN-ZEB-DS9308-USB","SDR-SCN-ZEB-RFD8500","SDR-TAB-IPHONE-SE","SDR-TAB-IPOD-TCH","SDR-ZEB-CHG-CRA","SDY-SCN-RFID","SEL-CAB-CRA-M-INT433","SEL-CRA-DAT-M-INT433","SEL-SCN-DAT-PM9500","SEL-SCN-DAT-PM9501","SEL-SCN-DS4208-USB","SEL-SCN-MET-9540-USB","SHO-SCN-DS9208-USB","SIG-CRA-VX680","SPK-VOC-HDSET-S5","SUP-CAB-NLSHR22-USB","SUP-HHT-ZEBRA-TC26-PSL","SUP-SCN-HHT-ZEB-TC51","SUP-SU-SCN-DS9208-EAS","SVR-VOC-CTRLR","THR-BAT-SYM-CS4070","THR-CAB-IPAD-CHARGE-BLK","THR-CAB-SYM-CS4070","THR-CAB-ZEB-CS4070","THR-CON-CS4070-LANYARD","THR-DOCK-CHARGE-6080","THR-DOCK-CHARGE-CS4070","THR-DOCK-CHG-CUP-6080","THR-IPAD-AIR-4TH","THR-IPAD-RUGGED-CASE","THR-SCN-SYM-CS4070","THR-SCN-ZEB-CS6080","TPRG-SCN-DS2208-SR","TPS-CAB-SCN-DS9308","TPS-CRA-TC51","TPS-SCN-DS9208-SR2D","TPS-SCN-ZEB-DS9308","TRG-BAT-ZEB-HHT","TRG-CASE-SAM-A8-10.5IN","TRG-CRA-SYM-MC40-5SLOT","TRG-CRA-VX680","TRG-CRA-ZEB-BAT-4SLOT","TRG-CRA-ZEB-HHT-BAT-4SLOT","TRG-CRA-ZEB-TC52-5SLOT","TRG-HHT-ZEB-TC22","TRG-HHT-ZEB-TC52","TRG-MON-HP-E22-G5-22IN","TRG-PHONE-BT-DECT","TRG-SCN-SYM-DS9208","TRG-SCN-ZEB-DS9308","TRG-TAB-IPAD-MINI-A2124","TRG-TAB-IPAD-MINI-A2133","TRG-TAB-IPAD-MINI-A2567","TRG-TAB-IPAD-MINI-A2993","TRG-TAB-IPAD-MINI2","TRG-TAB-IPAD7-A2197","TRG-TAB-IPAD9-A2602","TRG-TAB-IPOD-TCH-6GEN","TRG-TAB-SAM-A8","TRG-TAB-SAM-A9-PLUS-64","TUI-LAP-DELL-WD19-DOCK","WHI-SCN-SYM-DS9208-USB","WHIT-MNT-TAB-DFWC-KIT","WHIT-SCN-WINCOR","WHIT-TAB-CSE-LEN-M10","WHIT-TAB-LEN-M10","YC-SCN-DS9208","YC-SCN-ZEB-DS9308"]);
 
@@ -356,6 +453,8 @@ TICKS_REF.on('value', snap => {
   ticks = snap.val() || {};
   updateDoneCount();
   renderTable();
+  // Auto-save to permanent history whenever ticks update
+  if (outputRows.length > 0) saveToHistory();
 });
 
 function safeKey(partId) {
@@ -499,6 +598,90 @@ function toggleTheme() {
   }
 })();
 
+// Store selected part for modal
+let selectedPartId = null;
+
+function openModal() {
+  document.getElementById('modal-overlay').classList.add('open');
+  document.getElementById('part-search-input').value = '';
+  document.getElementById('part-dropdown').style.display = 'none';
+  document.getElementById('modal-selected').style.display = 'none';
+  document.getElementById('modal-confirm').style.display = 'none';
+  document.getElementById('part-dropdown').innerHTML = '';
+  selectedPartId = null;
+  setTimeout(() => document.getElementById('part-search-input').focus(), 100);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  selectedPartId = null;
+}
+
+function searchParts(query) {
+  const dropdown = document.getElementById('part-dropdown');
+  if (!query || query.length < 1) { dropdown.style.display = 'none'; return; }
+  const q = query.toUpperCase();
+  // Search through DCD_PARTS
+  const matches = [...DCD_PARTS].filter(p => p.includes(q)).slice(0, 30);
+  if (matches.length === 0) { dropdown.style.display = 'none'; return; }
+  dropdown.innerHTML = '';
+  matches.forEach(partId => {
+    const cls = (window.gradeMap || {})[partId] || '';
+    const val = GRADE_VALUE[cls] ? `£${GRADE_VALUE[cls].toFixed(2)}` : 'No grade';
+    const div = document.createElement('div');
+    div.className = 'part-option';
+    div.innerHTML = `<span>${partId}</span><span class="part-option-grade">${cls ? cls + ' — ' + val : 'No grade'}</span>`;
+    div.onclick = () => selectPart(partId, cls);
+    dropdown.appendChild(div);
+  });
+  dropdown.style.display = 'block';
+}
+
+function selectPart(partId, cls) {
+  selectedPartId = partId;
+  const val = GRADE_VALUE[cls];
+  document.getElementById('sel-part-id').textContent = partId;
+  document.getElementById('sel-part-info').textContent = cls ? `Class: ${cls} — Value: £${val.toFixed(2)}` : 'No grade assigned';
+  document.getElementById('modal-selected').style.display = 'flex';
+  document.getElementById('modal-confirm').style.display = 'inline-block';
+  document.getElementById('part-dropdown').style.display = 'none';
+  document.getElementById('part-search-input').value = partId;
+}
+
+function confirmAddPart() {
+  if (!selectedPartId) return;
+  // Check if already in list
+  const exists = outputRows.find(r => r['Part ID'] === selectedPartId);
+  if (exists) {
+    alert(`${selectedPartId} is already in the list.`);
+    closeModal();
+    return;
+  }
+  const cls = (window.gradeMap || {})[selectedPartId] || '';
+  const val = GRADE_VALUE[cls] ?? '';
+  // Add as a manual rank 2 entry
+  outputRows.push({
+    Priority: 2,
+    'Part ID': selectedPartId,
+    'Repair Team': 'Manual',
+    'Rep Req': 0,
+    'Open Orders': '',
+    'Total Qty': 0,
+    'Part Class': cls,
+    Value: val,
+    _manual: true
+  });
+  closeModal();
+  renderTable();
+  // Auto-add 1 tick so it appears in completed today
+  addTick(selectedPartId);
+}
+
+// Close modal on overlay click
+document.addEventListener('click', e => {
+  if (e.target.id === 'modal-overlay') closeModal();
+});
+
 async function loadAll() {
   document.getElementById('loading-bar').style.display = 'flex';
   document.getElementById('stats-bar').style.display = 'none';
@@ -518,12 +701,13 @@ async function loadAll() {
 
     document.getElementById('loading-msg').textContent = 'Building priority list...';
 
-    const gradeMap = {};
+    window.gradeMap = {};
     gradingRows.forEach(r => {
       const id = (r['part_id'] || r['Part ID'] || '').toString().trim();
       const cls = (r['part_class'] || r['Part Class'] || '').toString().trim();
-      if (id && cls) gradeMap[id] = cls;
+      if (id && cls) window.gradeMap[id] = cls;
     });
+    const gradeMap = window.gradeMap;
 
     const pbiMap = {};
     pbiRows.forEach(r => {
@@ -699,22 +883,113 @@ function printList(dept) {
   renderTable();
 }
 
+// History Firebase listener
+let historyData = {};
+HISTORY_REF.on('value', snap => {
+  historyData = snap.val() || {};
+  updateHistoryCount();
+  if (typeof currentTab !== 'undefined' && currentTab === 'history') renderHistory();
+});
+
+function updateHistoryCount() {
+  let total = 0;
+  Object.values(historyData).forEach(day => {
+    Object.values(day).forEach(entry => { total += entry.count || 0; });
+  });
+  document.getElementById('tab-count-history').textContent = total;
+}
+
+function saveToHistory() {
+  // Save today's ticks to permanent history
+  const dayRef = HISTORY_REF.child(TODAY);
+  Object.keys(ticks).forEach(key => {
+    const tick = ticks[key];
+    const count = typeof tick === 'object' ? (tick.count || 0) : 0;
+    if (count === 0) return;
+    // Find the part in outputRows to get class/value
+    const partId = key.replace(/_/g, match => {
+      // Reverse safeKey — best effort
+      return match;
+    });
+    // Find matching outputRow
+    const row = outputRows.find(r => safeKey(r['Part ID']) === key);
+    const cls = row ? (row['Part Class'] || '') : '';
+    const val = row ? (typeof row.Value === 'number' ? row.Value : 0) : 0;
+    dayRef.child(key).set({ partId: row ? row['Part ID'] : key, count, cls, val, earned: val * count });
+  });
+}
+
+function renderHistory() {
+  const tbody = document.getElementById('history-body');
+  tbody.innerHTML = '';
+
+  const allEntries = [];
+  Object.keys(historyData).sort().reverse().forEach(date => {
+    const day = historyData[date];
+    Object.values(day).forEach(entry => {
+      allEntries.push({ date, ...entry });
+    });
+  });
+
+  if (allEntries.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty-done">No history yet — complete some parts to start tracking</td></tr>`;
+    document.getElementById('hist-total-parts').textContent = '0';
+    document.getElementById('hist-total-repairs').textContent = '0';
+    document.getElementById('hist-total-earned').textContent = '£0.00';
+    return;
+  }
+
+  let totalRepairs = 0, totalEarned = 0;
+
+  allEntries.forEach((e, i) => {
+    const bg = i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
+    const earned = e.earned || (e.val * e.count) || 0;
+    totalRepairs += e.count || 0;
+    totalEarned += earned;
+    const cls = e.cls || '';
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};font-size:0.7rem;color:var(--muted);">${e.date}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};font-weight:600;">${e.partId || e.date}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;color:var(--green);font-weight:700;">${e.count}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;" class="grade-${cls}">${cls}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">${e.val ? '£' + Number(e.val).toFixed(2) : '—'}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;color:var(--green);font-weight:600;">${earned ? '£' + earned.toFixed(2) : '—'}</td>`;
+    tbody.appendChild(tr);
+  });
+
+  document.getElementById('hist-total-parts').textContent = allEntries.length;
+  document.getElementById('hist-total-repairs').textContent = totalRepairs;
+  document.getElementById('hist-total-earned').textContent = `£${totalEarned.toFixed(2)}`;
+}
+
+function clearHistory() {
+  if (confirm('Clear all history permanently? This cannot be undone.')) {
+    HISTORY_REF.remove();
+  }
+}
+
 function switchTab(tab, btn) {
   currentTab = tab;
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 
+  document.getElementById('actions-bar').style.display = 'none';
+  document.getElementById('table-wrap').style.display = 'none';
+  document.getElementById('zero-section').style.display = 'none';
+  document.getElementById('completed-wrap').style.display = 'none';
+  document.getElementById('history-wrap').style.display = 'none';
+
   if (tab === 'main') {
     document.getElementById('actions-bar').style.display = 'flex';
     document.getElementById('table-wrap').style.display = 'block';
     document.getElementById('zero-section').style.display = outputRows.length ? 'block' : 'none';
-    document.getElementById('completed-wrap').style.display = 'none';
-  } else {
-    document.getElementById('actions-bar').style.display = 'none';
-    document.getElementById('table-wrap').style.display = 'none';
-    document.getElementById('zero-section').style.display = 'none';
+  } else if (tab === 'done') {
     document.getElementById('completed-wrap').style.display = 'block';
     renderCompleted();
+  } else if (tab === 'history') {
+    document.getElementById('history-wrap').style.display = 'block';
+    renderHistory();
   }
 }
 

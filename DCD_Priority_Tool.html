@@ -405,6 +405,7 @@
         <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:left;">Date</th>
         <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:left;">Part ID</th>
         <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Repairs</th>
+        <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">BER'd</th>
         <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Class</th>
         <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Value</th>
         <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Earned</th>
@@ -478,6 +479,7 @@ TICKS_REF.on('value', snap => {
 BER_REF.on('value', snap => {
   bers = snap.val() || {};
   renderTable();
+  if (outputRows.length > 0) saveToHistory();
 });
 
 function safeKey(partId) {
@@ -972,22 +974,48 @@ function updateHistoryCount() {
 }
 
 function saveToHistory() {
-  // Save today's ticks to permanent history
   const dayRef = HISTORY_REF.child(TODAY);
+
+  // Save ticked parts
   Object.keys(ticks).forEach(key => {
     const tick = ticks[key];
     const count = typeof tick === 'object' ? (tick.count || 0) : 0;
     if (count === 0) return;
-    // Find the part in outputRows to get class/value
-    const partId = key.replace(/_/g, match => {
-      // Reverse safeKey — best effort
-      return match;
-    });
-    // Find matching outputRow
     const row = outputRows.find(r => safeKey(r['Part ID']) === key);
     const cls = row ? (row['Part Class'] || '') : '';
     const val = row ? (typeof row.Value === 'number' ? row.Value : 0) : 0;
-    dayRef.child(key).set({ partId: row ? row['Part ID'] : key, count, cls, val, earned: val * count });
+    const berCount = getBerCount(row ? row['Part ID'] : key);
+    const berEarned = berCount * 0.10;
+    dayRef.child(key).set({
+      partId: row ? row['Part ID'] : key,
+      count,
+      cls,
+      val,
+      earned: (val * count) + berEarned,
+      berCount,
+      berEarned,
+      type: 'tick'
+    });
+  });
+
+  // Save BER-only parts (not already ticked)
+  Object.keys(bers).forEach(key => {
+    if (ticks[key]) return; // already saved above
+    const ber = bers[key];
+    const berCount = typeof ber === 'object' ? (ber.count || 0) : 0;
+    if (berCount === 0) return;
+    const row = outputRows.find(r => safeKey(r['Part ID']) === key);
+    const cls = row ? (row['Part Class'] || '') : '';
+    dayRef.child(`ber_${key}`).set({
+      partId: row ? row['Part ID'] : key,
+      count: 0,
+      cls,
+      val: 0,
+      earned: berCount * 0.10,
+      berCount,
+      berEarned: berCount * 0.10,
+      type: 'ber'
+    });
   });
 }
 
@@ -999,7 +1027,7 @@ function renderHistory() {
   Object.keys(historyData).sort().reverse().forEach(date => {
     const day = historyData[date];
     Object.values(day).forEach(entry => {
-      allEntries.push({ date, ...entry });
+      allEntries.push({ date, ...entry, isBerOnly: entry.type === 'ber' });
     });
   });
 
@@ -1019,11 +1047,15 @@ function renderHistory() {
     totalRepairs += e.count || 0;
     totalEarned += earned;
     const cls = e.cls || '';
+    const berCount = e.berCount || 0;
+    const tickLabel = e.count > 0 ? `<span style="color:var(--green);font-weight:700;">${e.count}</span>` : '—';
+    const berLabel = berCount > 0 ? `<span style="color:#c00000;font-weight:700;">${berCount} BER</span>` : '—';
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};font-size:0.7rem;color:var(--muted);">${e.date}</td>
-      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};font-weight:600;">${e.partId || e.date}</td>
-      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;color:var(--green);font-weight:700;">${e.count}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};font-weight:600;">${e.partId || ''}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">${tickLabel}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">${berLabel}</td>
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;" class="grade-${cls}">${cls}</td>
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">${e.val ? '£' + Number(e.val).toFixed(2) : '—'}</td>
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;color:var(--green);font-weight:600;">${earned ? '£' + earned.toFixed(2) : '—'}</td>`;

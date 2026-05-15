@@ -400,6 +400,8 @@
     <div class="stat"><span class="stat-label">All-Time Parts</span><span class="stat-value" id="hist-total-parts" style="color:#a855f7;">0</span></div>
     <div class="stat"><span class="stat-label">All-Time Repairs</span><span class="stat-value" id="hist-total-repairs" style="color:var(--text);">0</span></div>
     <div class="stat"><span class="stat-label">All-Time Earned</span><span class="stat-value" id="hist-total-earned" style="color:var(--green);">£0.00</span></div>
+    <div class="stat"><span class="stat-label">Days Worked</span><span class="stat-value" id="hist-days-worked" style="color:var(--accent2);">0</span></div>
+    <div class="stat"><span class="stat-label">Avg Repairs / Day</span><span class="stat-value" id="hist-avg-repairs" style="color:var(--text);">0</span></div>
     <button onclick="openModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.45rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);">+ Add Part</button>
     <button onclick="clearHistory()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Clear History</button>
   </div>
@@ -459,7 +461,7 @@ const REPO = 'NotKamran07/dcd-priority-list';
 const BRANCH = 'main';
 // Use jsDelivr CDN which has CORS enabled for GitHub files
 const RAW = `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}`;
-const GRADE_VALUE = { A: 0.10, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
+const GRADE_VALUE = { A: 0.25, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
 const TODAY = new Date().toISOString().slice(0, 10);
 const TICKS_REF = db.ref(`ticks/${TODAY}`);
 const BER_REF = db.ref(`ber/${TODAY}`);
@@ -1081,6 +1083,18 @@ function incrementHistoryEntry(date, key) {
   });
 }
 
+function addBerToHistory(date, key) {
+  if (!key) return;
+  HISTORY_REF.child(date).child(key).transaction(entry => {
+    if (!entry) return entry;
+    entry.berCount = (entry.berCount || 0) + 1;
+    entry.berEarned = entry.berCount * 0.10;
+    const val = entry.val || 0;
+    entry.earned = (val * (entry.count || 0)) + entry.berEarned;
+    return entry;
+  });
+}
+
 function removeBerFromHistory(date, key, currentCount, currentBer) {
   if (!key) return;
   const newBer = currentBer - 1;
@@ -1154,9 +1168,13 @@ function renderHistory() {
     tbody.appendChild(tr);
   });
 
+  const uniqueDays = new Set(allEntries.map(e => e.date)).size;
+  const avgRepairs = uniqueDays > 0 ? (totalRepairs / uniqueDays).toFixed(1) : '0';
   document.getElementById('hist-total-parts').textContent = allEntries.length;
   document.getElementById('hist-total-repairs').textContent = totalRepairs;
   document.getElementById('hist-total-earned').textContent = `£${totalEarned.toFixed(2)}`;
+  document.getElementById('hist-days-worked').textContent = uniqueDays;
+  document.getElementById('hist-avg-repairs').textContent = avgRepairs;
 }
 
 function clearHistory() {
@@ -1215,13 +1233,26 @@ function renderCompleted() {
 
     const valStr = val ? `£${val.toFixed(2)}` : '';
     const rowEarningsStr = rowEarnings ? `£${rowEarnings.toFixed(2)}` : '—';
+    const partId = row['Part ID'];
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td><span class="badge badge-${row.Priority}">${row.Priority}</span></td>
-      <td class="part-id">${row['Part ID']}</td>
+      <td class="part-id">${partId}</td>
       <td>${row['Repair Team'] || ''}</td>
-      <td class="num-cell" style="color:var(--green);font-weight:700;">${tickCount}</td>
-      <td class="num-cell" style="color:#c00000;font-weight:700;">${berCount > 0 ? berCount : '—'}</td>
+      <td class="num-cell">
+        <div class="tick-counter">
+          <button class="tick-minus" onclick="removeTick('${partId}')" ${tickCount === 0 ? 'disabled' : ''}>−</button>
+          <span class="tick-num ${tickCount > 0 ? 'ticked' : ''}">${tickCount}</span>
+          <button class="tick-plus" onclick="addTick('${partId}')">+</button>
+        </div>
+      </td>
+      <td class="num-cell">
+        <div class="ber-counter">
+          <button class="ber-btn ber-minus" onclick="removeBer('${partId}')" ${berCount === 0 ? 'disabled' : ''}>−</button>
+          <span class="ber-num ${berCount > 0 ? 'berred' : ''}">${berCount}</span>
+          <button class="ber-btn" onclick="addBer('${partId}')">BER</button>
+        </div>
+      </td>
       <td class="num-cell">${row['Open Orders'] !== '' ? row['Open Orders'] : '—'}</td>
       <td class="num-cell">${row['Total Qty'] !== '' ? row['Total Qty'] : '—'}</td>
       <td class="num-cell grade-${cls}">${cls}</td>

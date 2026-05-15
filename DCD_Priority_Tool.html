@@ -409,6 +409,7 @@
         <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Class</th>
         <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Value</th>
         <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Earned</th>
+        <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;"></th>
       </tr>
     </thead>
     <tbody id="history-body"></tbody>
@@ -1019,6 +1020,54 @@ function saveToHistory() {
   });
 }
 
+function decrementHistoryEntry(date, key, currentCount, currentBer) {
+  if (!key) return;
+  const newCount = currentCount - 1;
+  if (newCount <= 0 && currentBer <= 0) {
+    // Remove entirely if both repairs and BER hit 0
+    HISTORY_REF.child(date).child(key).remove();
+  } else {
+    // Just reduce the count and recalculate earned
+    HISTORY_REF.child(date).child(key).transaction(entry => {
+      if (!entry) return entry;
+      entry.count = Math.max(0, (entry.count || 0) - 1);
+      const val = entry.val || 0;
+      const berEarned = entry.berEarned || 0;
+      entry.earned = (val * entry.count) + berEarned;
+      return entry;
+    });
+  }
+}
+
+function incrementHistoryEntry(date, key) {
+  if (!key) return;
+  HISTORY_REF.child(date).child(key).transaction(entry => {
+    if (!entry) return entry;
+    entry.count = (entry.count || 0) + 1;
+    const val = entry.val || 0;
+    const berEarned = entry.berEarned || 0;
+    entry.earned = (val * entry.count) + berEarned;
+    return entry;
+  });
+}
+
+function removeBerFromHistory(date, key, currentCount, currentBer) {
+  if (!key) return;
+  const newBer = currentBer - 1;
+  if (newBer <= 0 && currentCount <= 0) {
+    HISTORY_REF.child(date).child(key).remove();
+  } else {
+    HISTORY_REF.child(date).child(key).transaction(entry => {
+      if (!entry) return entry;
+      entry.berCount = Math.max(0, (entry.berCount || 0) - 1);
+      entry.berEarned = entry.berCount * 0.10;
+      const val = entry.val || 0;
+      entry.earned = (val * (entry.count || 0)) + entry.berEarned;
+      return entry;
+    });
+  }
+}
+
 function renderHistory() {
   const tbody = document.getElementById('history-body');
   tbody.innerHTML = '';
@@ -1026,8 +1075,8 @@ function renderHistory() {
   const allEntries = [];
   Object.keys(historyData).sort().reverse().forEach(date => {
     const day = historyData[date];
-    Object.values(day).forEach(entry => {
-      allEntries.push({ date, ...entry, isBerOnly: entry.type === 'ber' });
+    Object.keys(day).forEach(key => {
+      allEntries.push({ date, ...day[key], isBerOnly: day[key].type === 'ber', _key: key });
     });
   });
 
@@ -1044,6 +1093,7 @@ function renderHistory() {
   allEntries.forEach((e, i) => {
     const bg = i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
     const earned = e.earned || (e.val * e.count) || 0;
+    const entryKey = e._key || '';
     totalRepairs += e.count || 0;
     totalEarned += earned;
     const cls = e.cls || '';
@@ -1058,7 +1108,19 @@ function renderHistory() {
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">${berLabel}</td>
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;" class="grade-${cls}">${cls}</td>
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">${e.val ? '£' + Number(e.val).toFixed(2) : '—'}</td>
-      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;color:var(--green);font-weight:600;">${earned ? '£' + earned.toFixed(2) : '—'}</td>`;
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;color:var(--green);font-weight:600;">${earned ? '£' + earned.toFixed(2) : '—'}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">
+        <div style="display:flex;flex-direction:column;gap:3px;align-items:center;">
+          ${e.count > 0 ? `<div style="display:flex;align-items:center;gap:3px;">
+            <button onclick="decrementHistoryEntry('${e.date}','${entryKey}',${e.count},${berCount})" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.6rem;width:18px;height:18px;border-radius:2px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;" title="Remove 1 repair">−</button>
+            <span style="font-size:0.6rem;color:var(--muted);">rep</span>
+          </div>` : ''}
+          ${berCount > 0 ? `<div style="display:flex;align-items:center;gap:3px;">
+            <button onclick="removeBerFromHistory('${e.date}','${entryKey}',${e.count},${berCount})" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.6rem;width:18px;height:18px;border-radius:2px;border:1px solid #c00000;background:transparent;color:#c00000;cursor:pointer;line-height:1;" title="Remove 1 BER">−</button>
+            <span style="font-size:0.6rem;color:#c00000;">ber</span>
+          </div>` : ''}
+        </div>
+      </td>`;
     tbody.appendChild(tr);
   });
 

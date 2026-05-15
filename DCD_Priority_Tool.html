@@ -322,7 +322,7 @@
   <button id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
   <button id="export-btn" onclick="exportXLSX()">Export to Excel</button>
   <button id="reset-btn" onclick="resetTicks()">Reset All Ticks</button>
-  <button id="add-part-btn" onclick="openModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);transition:opacity 0.2s;">+ Add Part</button>
+
   <button class="print-btn" onclick="printList('all')">🖨 Print All</button>
   <button class="print-btn" onclick="printList('RC DCD')">🖨 RC DCD</button>
   <button class="print-btn" onclick="printList('RC MCD')">🖨 RC MCD</button>
@@ -372,6 +372,9 @@
       <span class="stat-value" id="earnings-ticks" style="color:var(--text);">0</span>
     </div>
   </div>
+  <div style="padding:0 0 1rem;">
+    <button onclick="openModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);">+ Add Part</button>
+  </div>
   <table id="completed-table">
     <thead>
       <tr>
@@ -397,7 +400,8 @@
     <div class="stat"><span class="stat-label">All-Time Parts</span><span class="stat-value" id="hist-total-parts" style="color:#a855f7;">0</span></div>
     <div class="stat"><span class="stat-label">All-Time Repairs</span><span class="stat-value" id="hist-total-repairs" style="color:var(--text);">0</span></div>
     <div class="stat"><span class="stat-label">All-Time Earned</span><span class="stat-value" id="hist-total-earned" style="color:var(--green);">£0.00</span></div>
-    <button onclick="clearHistory()" style="margin-left:auto;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Clear History</button>
+    <button onclick="openModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.45rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);">+ Add Part</button>
+    <button onclick="clearHistory()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Clear History</button>
   </div>
   <table style="width:100%;border-collapse:collapse;font-size:0.72rem;">
     <thead>
@@ -419,7 +423,7 @@
 <!-- Add Part Modal -->
 <div id="modal-overlay">
   <div id="modal-box">
-    <h2>Add Part Manually</h2>
+    <h2>Add Part to Completed</h2>
     <label>Search Part ID</label>
     <input id="part-search-input" type="search" placeholder="Type to search..." oninput="searchParts(this.value)" autocomplete="off"/>
     <div id="part-dropdown"></div>
@@ -431,7 +435,8 @@
     </div>
     <div class="modal-btns">
       <button id="modal-cancel" onclick="closeModal()">Cancel</button>
-      <button id="modal-confirm" onclick="confirmAddPart()">Add Part</button>
+      <button id="modal-confirm-tick" onclick="confirmAddPart('tick')" style="display:none;background:var(--green);color:white;border-color:var(--green);">✓ Mark Completed</button>
+      <button id="modal-confirm-ber" onclick="confirmAddPart('ber')" style="display:none;background:#c00000;color:white;border-color:#c00000;">✕ Mark as BER</button>
     </div>
   </div>
 </div>
@@ -669,7 +674,8 @@ function openModal() {
   document.getElementById('part-search-input').value = '';
   document.getElementById('part-dropdown').style.display = 'none';
   document.getElementById('modal-selected').style.display = 'none';
-  document.getElementById('modal-confirm').style.display = 'none';
+  document.getElementById('modal-confirm-tick').style.display = 'none';
+  document.getElementById('modal-confirm-ber').style.display = 'none';
   document.getElementById('part-dropdown').innerHTML = '';
   selectedPartId = null;
   setTimeout(() => document.getElementById('part-search-input').focus(), 100);
@@ -706,38 +712,62 @@ function selectPart(partId, cls) {
   document.getElementById('sel-part-id').textContent = partId;
   document.getElementById('sel-part-info').textContent = cls ? `Class: ${cls} — Value: £${val.toFixed(2)}` : 'No grade assigned';
   document.getElementById('modal-selected').style.display = 'flex';
-  document.getElementById('modal-confirm').style.display = 'inline-block';
+  document.getElementById('modal-confirm-tick').style.display = 'inline-block';
+  document.getElementById('modal-confirm-ber').style.display = 'inline-block';
   document.getElementById('part-dropdown').style.display = 'none';
   document.getElementById('part-search-input').value = partId;
 }
 
-function confirmAddPart() {
+function confirmAddPart(type) {
   if (!selectedPartId) return;
-  // Check if already in list
-  const exists = outputRows.find(r => r['Part ID'] === selectedPartId);
-  if (exists) {
-    alert(`${selectedPartId} is already in the list.`);
-    closeModal();
-    return;
-  }
   const cls = (window.gradeMap || {})[selectedPartId] || '';
-  const val = GRADE_VALUE[cls] ?? '';
-  // Add as a manual rank 2 entry
-  outputRows.push({
-    Priority: 2,
-    'Part ID': selectedPartId,
-    'Repair Team': 'Manual',
-    'Rep Req': 0,
-    'Open Orders': '',
-    'Total Qty': 0,
-    'Part Class': cls,
-    Value: val,
-    _manual: true
-  });
+  const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
+  const key = safeKey(selectedPartId);
+  const dayRef = HISTORY_REF.child(TODAY);
+
+  if (type === 'tick') {
+    // Add to today's ticks in Firebase
+    const currentTick = getTickCount(selectedPartId);
+    TICKS_REF.child(key).set({ count: currentTick + 1 });
+    // Also ensure it's in outputRows for saveToHistory to pick up
+    if (!outputRows.find(r => r['Part ID'] === selectedPartId)) {
+      outputRows.push({
+        Priority: 2, 'Part ID': selectedPartId, 'Repair Team': 'Manual',
+        'Rep Req': 0, 'Open Orders': '', 'Total Qty': 0,
+        'Part Class': cls, Value: val, _manual: true
+      });
+    }
+    // Save directly to history too
+    const histKey = key;
+    dayRef.child(histKey).transaction(entry => {
+      if (!entry) return { partId: selectedPartId, count: 1, cls, val, earned: val, berCount: 0, berEarned: 0, type: 'tick' };
+      entry.count = (entry.count || 0) + 1;
+      entry.earned = (val * entry.count) + (entry.berEarned || 0);
+      return entry;
+    });
+  } else if (type === 'ber') {
+    // Add to today's BERs in Firebase
+    const currentBer = getBerCount(selectedPartId);
+    BER_REF.child(key).set({ count: currentBer + 1 });
+    if (!outputRows.find(r => r['Part ID'] === selectedPartId)) {
+      outputRows.push({
+        Priority: 2, 'Part ID': selectedPartId, 'Repair Team': 'Manual',
+        'Rep Req': 0, 'Open Orders': '', 'Total Qty': 0,
+        'Part Class': cls, Value: val, _manual: true
+      });
+    }
+    // Save directly to history
+    const histKey = `ber_${key}`;
+    dayRef.child(histKey).transaction(entry => {
+      if (!entry) return { partId: selectedPartId, count: 0, cls, val: 0, earned: 0.10, berCount: 1, berEarned: 0.10, type: 'ber' };
+      entry.berCount = (entry.berCount || 0) + 1;
+      entry.berEarned = entry.berCount * 0.10;
+      entry.earned = (val * (entry.count || 0)) + entry.berEarned;
+      return entry;
+    });
+  }
+
   closeModal();
-  renderTable();
-  // Auto-add 1 tick so it appears in completed today
-  addTick(selectedPartId);
 }
 
 // Close modal on overlay click

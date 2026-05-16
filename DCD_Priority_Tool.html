@@ -928,7 +928,7 @@ function renderTable() {
         <div class="ber-counter">
           <button class="ber-btn ber-minus" onclick="removeBer('${partId}')" ${berCount === 0 ? 'disabled' : ''}>−</button>
           <span class="ber-num ${berCount > 0 ? 'berred' : ''}">${berCount}</span>
-          <button class="ber-btn" onclick="addBer('${partId}')" ${berPlusDisabled ? 'disabled' : ''}>BER</button>
+          <button class="ber-btn" onclick="addBer('${partId}')" ${berPlusDisabled ? 'disabled' : ''}>+</button>
         </div>
       </td>
       <td><span class="badge badge-${displayPriority}">${displayPriority}</span></td>

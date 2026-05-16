@@ -1168,7 +1168,7 @@ function renderHistory() {
           <div style="display:flex;align-items:center;gap:3px;">
             <button onclick="removeBerFromHistory('${e.date}','${entryKey}',${e.count},${berCount})" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;width:20px;height:20px;border-radius:2px;border:1px solid #c00000;background:transparent;color:#c00000;cursor:pointer;line-height:1;" ${berCount === 0 ? 'disabled' : ''}>−</button>
             <span style="font-size:0.75rem;font-weight:700;color:#c00000;min-width:16px;text-align:center;">${berCount}</span>
-            <button onclick="addBerToHistory('${e.date}','${entryKey}')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.55rem;padding:0 5px;height:20px;border-radius:2px;border:1px solid #c00000;background:#c00000;color:white;cursor:pointer;line-height:1;">BER</button>
+            <button onclick="addBerToHistory('${e.date}','${entryKey}')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;width:20px;height:20px;border-radius:2px;border:1px solid #c00000;background:#c00000;color:white;cursor:pointer;line-height:1;">+</button>
           </div>
         </div>
       </td>`;
@@ -1257,7 +1257,7 @@ function renderCompleted() {
         <div class="ber-counter">
           <button class="ber-btn ber-minus" onclick="removeBer('${partId}')" ${berCount === 0 ? 'disabled' : ''}>−</button>
           <span class="ber-num ${berCount > 0 ? 'berred' : ''}">${berCount}</span>
-          <button class="ber-btn" onclick="addBer('${partId}')">BER</button>
+          <button class="ber-btn" onclick="addBer('${partId}')">+</button>
         </div>
       </td>
       <td class="num-cell">${row['Open Orders'] !== '' ? row['Open Orders'] : '—'}</td>

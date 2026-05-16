@@ -478,15 +478,18 @@ document.getElementById('date-badge').textContent =
 TICKS_REF.on('value', snap => {
   ticks = snap.val() || {};
   updateDoneCount();
-  renderTable();
-  // Auto-save to permanent history whenever ticks update
+  if (currentTab === 'main') renderTable();
+  else if (currentTab === 'done') renderCompleted();
+  else if (currentTab === 'history') renderHistory();
   if (outputRows.length > 0) saveToHistory();
 });
 
 // Listen to BER counts in real time
 BER_REF.on('value', snap => {
   bers = snap.val() || {};
-  renderTable();
+  if (currentTab === 'main') renderTable();
+  else if (currentTab === 'done') renderCompleted();
+  else if (currentTab === 'history') renderHistory();
   if (outputRows.length > 0) saveToHistory();
 });
 
@@ -950,7 +953,7 @@ function renderTable() {
   const zeroBody = document.getElementById('zero-body');
   document.getElementById('zero-count').textContent = `(${zeroRows.length})`;
   zeroBody.innerHTML = '';
-  if (zeroRows.length > 0 && outputRows.length > 0) {
+  if (zeroRows.length > 0 && outputRows.length > 0 && currentTab === 'main') {
     zeroSection.style.display = 'block';
     zeroRows.forEach(row => {
       const tr = document.createElement('tr');
@@ -1201,7 +1204,7 @@ function switchTab(tab, btn) {
   if (tab === 'main') {
     document.getElementById('actions-bar').style.display = 'flex';
     document.getElementById('table-wrap').style.display = 'block';
-    document.getElementById('zero-section').style.display = outputRows.length ? 'block' : 'none';
+    renderTable();
   } else if (tab === 'done') {
     document.getElementById('completed-wrap').style.display = 'block';
     renderCompleted();

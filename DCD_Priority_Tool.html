@@ -1155,14 +1155,18 @@ function renderHistory() {
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;color:var(--green);font-weight:600;">${earned ? '£' + earned.toFixed(2) : '—'}</td>
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">
         <div style="display:flex;flex-direction:column;gap:3px;align-items:center;">
-          ${e.count > 0 ? `<div style="display:flex;align-items:center;gap:3px;">
-            <button onclick="decrementHistoryEntry('${e.date}','${entryKey}',${e.count},${berCount})" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.6rem;width:18px;height:18px;border-radius:2px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;" title="Remove 1 repair">−</button>
+          <div style="display:flex;flex-direction:column;gap:4px;align-items:center;">
+          <div style="display:flex;align-items:center;gap:3px;">
+            <button onclick="decrementHistoryEntry('${e.date}','${entryKey}',${e.count},${berCount})" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;width:20px;height:20px;border-radius:2px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;" ${e.count === 0 ? 'disabled' : ''}>−</button>
+            <span style="font-size:0.75rem;font-weight:700;color:var(--green);min-width:16px;text-align:center;">${e.count}</span>
+            <button onclick="incrementHistoryEntry('${e.date}','${entryKey}')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;width:20px;height:20px;border-radius:2px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;">+</button>
             <span style="font-size:0.6rem;color:var(--muted);">rep</span>
-          </div>` : ''}
-          ${berCount > 0 ? `<div style="display:flex;align-items:center;gap:3px;">
-            <button onclick="removeBerFromHistory('${e.date}','${entryKey}',${e.count},${berCount})" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.6rem;width:18px;height:18px;border-radius:2px;border:1px solid #c00000;background:transparent;color:#c00000;cursor:pointer;line-height:1;" title="Remove 1 BER">−</button>
-            <span style="font-size:0.6rem;color:#c00000;">ber</span>
-          </div>` : ''}
+          </div>
+          <div style="display:flex;align-items:center;gap:3px;">
+            <button onclick="removeBerFromHistory('${e.date}','${entryKey}',${e.count},${berCount})" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;width:20px;height:20px;border-radius:2px;border:1px solid #c00000;background:transparent;color:#c00000;cursor:pointer;line-height:1;" ${berCount === 0 ? 'disabled' : ''}>−</button>
+            <span style="font-size:0.75rem;font-weight:700;color:#c00000;min-width:16px;text-align:center;">${berCount}</span>
+            <button onclick="addBerToHistory('${e.date}','${entryKey}')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.55rem;padding:0 5px;height:20px;border-radius:2px;border:1px solid #c00000;background:#c00000;color:white;cursor:pointer;line-height:1;">BER</button>
+          </div>
         </div>
       </td>`;
     tbody.appendChild(tr);

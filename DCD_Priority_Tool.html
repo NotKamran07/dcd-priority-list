@@ -1419,6 +1419,7 @@ function parseImportCSV(text) {
 
   const grouped = {};
   const errors = [];
+  const seenTags = new Set();
 
   lines.slice(1).forEach((line, i) => {
     if (!line.trim()) return;
@@ -1442,9 +1443,20 @@ function parseImportCSV(text) {
       return;
     }
 
-    const key = isoDate + '__' + partId + '__' + status;
-    if (!grouped[key]) grouped[key] = { date: isoDate, partId, status, qty: 0 };
-    grouped[key].qty += qty;
+    // Treat NFF same as COMP
+    const normStatus = (status === 'NFF') ? 'COMP' : status;
+    // Use repair_tag to deduplicate — each unique tag = 1 job
+    const repairTag = (cols[headers.indexOf('repair_tag')] || '').trim();
+    const dedupKey = repairTag ? ('tag_' + repairTag) : (isoDate + '__' + partId + '__' + normStatus + '__' + i);
+    if (seenTags.has(dedupKey)) return; // skip duplicate repair tags
+    seenTags.add(dedupKey);
+    // Skip weekends
+    const dayOfWeek = new Date(isoDate + 'T12:00:00').getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) return; // 0=Sunday, 6=Saturday
+
+    const key = isoDate + '__' + partId + '__' + normStatus;
+    if (!grouped[key]) grouped[key] = { date: isoDate, partId, status: normStatus, qty: 0 };
+    grouped[key].qty += 1; // each unique repair tag = 1 job
   });
 
   importData = Object.values(grouped).map(g => {

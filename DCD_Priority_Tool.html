@@ -990,7 +990,6 @@ function startFirebaseListeners() {
 
   HISTORY_REF.on('value', snap => {
     historyData = snap.val() || {};
-    console.log('[HISTORY_REF listener] data received:', JSON.stringify(historyData));
     updateHistoryCount();
     if (currentTab === 'history') renderHistory();
   });
@@ -1079,7 +1078,6 @@ async function loadAll() {
     sortCol = null;
     renderTable();
     dataLoaded = true;
-    console.log('[loadAll] complete. dataLoaded=true, outputRows:', outputRows.length, 'ticks:', JSON.stringify(ticks), 'HISTORY_REF:', !!HISTORY_REF);
     // Now that outputRows is populated, save any existing ticks/BERs to history
     saveToHistory();
   } catch(err) {
@@ -1248,7 +1246,6 @@ function updateHistoryCount() {
 function saveToHistory() {
   console.log('[saveToHistory] called. HISTORY_REF:', !!HISTORY_REF, 'outputRows:', outputRows.length, 'ticks:', JSON.stringify(ticks));
   if (!HISTORY_REF || outputRows.length === 0) {
-    console.log('[saveToHistory] SKIPPED - missing ref or no outputRows');
     return;
   }
   const dayRef = HISTORY_REF.child(TODAY);
@@ -1567,7 +1564,6 @@ function getDateRowStyle(dateStr) {
 }
 
 function renderHistory() {
-  console.log('[renderHistory] historyData:', JSON.stringify(historyData));
   const tbody = document.getElementById('history-body');
   tbody.innerHTML = '';
 
@@ -1666,7 +1662,15 @@ function switchTab(tab, btn) {
     renderCompleted();
   } else if (tab === 'history') {
     document.getElementById('history-wrap').style.display = 'block';
-    renderHistory();
+    // If historyData is empty, force a fresh read from Firebase
+    if (Object.keys(historyData).length === 0 && HISTORY_REF) {
+      HISTORY_REF.once('value', snap => {
+        historyData = snap.val() || {};
+        renderHistory();
+      });
+    } else {
+      renderHistory();
+    }
   }
 }
 

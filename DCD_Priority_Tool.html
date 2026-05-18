@@ -257,9 +257,12 @@
 
   /* User Login Screen */
   #login-screen {
-    position: fixed; inset: 0; background: var(--bg); z-index: 2000;
+    position: fixed; inset: 0; background: var(--bg); z-index: 9999;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem;
+    pointer-events: all;
   }
+  #login-screen * { pointer-events: all; }
+  #import-file-input { pointer-events: none !important; }
   #login-screen .login-logo { height: 60px; width: auto; margin-bottom: 0.5rem; }
   #login-screen h2 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.4rem; color: var(--text); letter-spacing: -0.02em; }
   #login-screen p { font-size: 0.72rem; color: var(--muted); margin-top: -1.5rem; }
@@ -908,33 +911,39 @@ document.addEventListener('click', e => {
 });
 
 function loginAs(userId) {
-  currentUser = userId;
-  const user = USERS[userId];
+  try {
+    currentUser = userId;
+    const user = USERS[userId];
+    if (!user) { alert('Unknown user: ' + userId); return; }
 
-  // Set user-specific Firebase refs
-  TICKS_REF = db.ref(`users/${userId}/ticks/${TODAY}`);
-  BER_REF = db.ref(`users/${userId}/ber/${TODAY}`);
-  HISTORY_REF = db.ref(`users/${userId}/history`);
+    // Set user-specific Firebase refs
+    TICKS_REF = db.ref('users/' + userId + '/ticks/' + TODAY);
+    BER_REF = db.ref('users/' + userId + '/ber/' + TODAY);
+    HISTORY_REF = db.ref('users/' + userId + '/history');
 
-  // Update header badge
-  document.getElementById('active-user-badge').style.display = 'flex';
-  document.getElementById('active-user-name').textContent = user.name;
-  document.getElementById('header-user-dot').style.background = user.color;
+    // Update header badge
+    document.getElementById('active-user-badge').style.display = 'flex';
+    document.getElementById('active-user-name').textContent = user.name;
+    document.getElementById('header-user-dot').style.background = user.color;
 
-  // Hide login screen
-  document.getElementById('login-screen').style.display = 'none';
+    // Hide login screen
+    document.getElementById('login-screen').style.display = 'none';
 
-  // Start Firebase listeners for this user
-  startFirebaseListeners();
+    // Start Firebase listeners for this user
+    startFirebaseListeners();
 
-  // Listen to ALL users' ticks for live priority list view
-  ALL_TICKS_REF.on('value', snap => {
-    allUserTicks = snap.val() || {};
-    if (currentTab === 'main') renderTable();
-  });
+    // Listen to ALL users' ticks for live priority list view
+    ALL_TICKS_REF.on('value', snap => {
+      allUserTicks = snap.val() || {};
+      if (currentTab === 'main') renderTable();
+    });
 
-  // Load data
-  loadAll();
+    // Load data
+    loadAll();
+  } catch(err) {
+    alert('Login error: ' + err.message);
+    console.error(err);
+  }
 }
 
 function switchUser() {

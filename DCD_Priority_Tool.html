@@ -416,6 +416,10 @@
 
 <div id="table-wrap">
   <div id="print-header" style="display:none;"></div>
+  <div id="list-updated-bar" style="display:none; padding:0 0 0.75rem; font-size:0.65rem; color:var(--muted); display:flex; align-items:center; gap:0.5rem;">
+    <span style="width:6px;height:6px;border-radius:50%;background:var(--green);display:inline-block;"></span>
+    <span id="list-updated-text">Last updated: —</span>
+  </div>
   <table>
     <thead>
       <tr>
@@ -1073,6 +1077,13 @@ async function loadAll() {
     document.getElementById('table-wrap').style.display = 'block';
     document.getElementById('last-updated').style.display = 'block';
     document.getElementById('last-updated').textContent = 'Loaded at ' + new Date().toLocaleTimeString('en-GB');
+    // Set list updated bar
+    const listUpdatedBar = document.getElementById('list-updated-bar');
+    const listUpdatedText = document.getElementById('list-updated-text');
+    if (listUpdatedBar && listUpdatedText) {
+      listUpdatedBar.style.display = 'flex';
+      listUpdatedText.textContent = 'Priority list last updated: ' + new Date().toLocaleString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric', hour:'2-digit', minute:'2-digit' });
+    }
     document.getElementById('live-status').style.display = 'block';
     sortCol = null;
     renderTable();
@@ -1503,20 +1514,32 @@ function renderImportPreview(errors) {
 
 function confirmImport() {
   if (!importData.length || !currentUser) return;
+
+  // Group importData by date+partId to get definitive counts from this file
+  // Use SET (not ADD) so re-importing the same file doesn't duplicate
   importData.forEach(r => {
     const key = safeKey(r.partId);
     const histKey = r.repairs > 0 ? key : ('ber_' + key);
     HISTORY_REF.child(r.date).child(histKey).transaction(entry => {
       if (!entry) {
+        // New entry - set from import
         return { partId: r.partId, count: r.repairs, cls: r.cls, val: r.val, earned: r.earned, berCount: r.ber, berEarned: r.ber * 0.10, type: r.repairs > 0 ? 'tick' : 'ber' };
       }
-      entry.count = (entry.count || 0) + r.repairs;
-      entry.berCount = (entry.berCount || 0) + r.ber;
-      entry.berEarned = (entry.berCount) * 0.10;
-      entry.earned = ((entry.val || r.val) * entry.count) + entry.berEarned;
-      return entry;
+      // Existing entry — only update if import count is HIGHER (prevents duplicating on re-import)
+      const newCount = Math.max(entry.count || 0, r.repairs);
+      const newBer = Math.max(entry.berCount || 0, r.ber);
+      const newBerEarned = newBer * 0.10;
+      const val = entry.val || r.val;
+      return {
+        ...entry,
+        count: newCount,
+        berCount: newBer,
+        berEarned: newBerEarned,
+        earned: (val * newCount) + newBerEarned
+      };
     });
   });
+
   const importedCount = importData.length;
   clearImportPreview();
   alert('✓ ' + importedCount + ' entries imported successfully!');

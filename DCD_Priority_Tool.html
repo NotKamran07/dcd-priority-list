@@ -81,6 +81,15 @@
   .tab-btn.active .tab-count { background: var(--accent); color: white; }
   .tab-btn.tab-done.active { border-bottom-color: var(--green); }
   .tab-btn.tab-history.active { border-bottom-color: #a855f7; }
+  .hist-sub-btn {
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.72rem;
+    text-transform: uppercase; letter-spacing: 0.05em; padding: 0.6rem 1.2rem;
+    cursor: pointer; border: none; background: transparent; color: var(--muted);
+    border-bottom: 2px solid transparent; transition: all 0.15s;
+  }
+  .hist-sub-btn:hover { color: var(--text); }
+  .hist-sub-btn.active { color: #a855f7; border-bottom-color: #a855f7; }
+  #import-drop-zone:hover { border-color: var(--green); }
   .tab-btn.tab-history.active .tab-count { background: #a855f7; }
   .tab-btn.tab-done.active .tab-count { background: var(--green); }
 
@@ -468,7 +477,13 @@
 
 <!-- History Tab -->
 <div id="history-wrap" style="display:none; padding:1.5rem 2.5rem 3rem;">
-  <div id="history-summary" style="display:flex; gap:2.5rem; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--border); padding-bottom:1.5rem; margin-bottom:1.5rem;">
+  <div style="display:flex; gap:0; border-bottom:1px solid var(--border); margin-bottom:1.5rem;">
+  <button class="hist-sub-btn active" id="sub-history" onclick="switchHistorySub('history', this)">History</button>
+  <button class="hist-sub-btn" id="sub-import" onclick="switchHistorySub('import', this)">⬆ Import KPI</button>
+</div>
+
+<div id="hist-history-section">
+<div id="history-summary" style="display:flex; gap:2.5rem; align-items:center; flex-wrap:wrap; border-bottom:1px solid var(--border); padding-bottom:1.5rem; margin-bottom:1.5rem;">
     <div class="stat"><span class="stat-label">All-Time Parts</span><span class="stat-value" id="hist-total-parts" style="color:#a855f7;">0</span></div>
     <div class="stat"><span class="stat-label">All-Time Repairs</span><span class="stat-value" id="hist-total-repairs" style="color:var(--text);">0</span></div>
     <div class="stat"><span class="stat-label">All-Time Earned</span><span class="stat-value" id="hist-total-earned" style="color:var(--green);">£0.00</span></div>
@@ -492,7 +507,55 @@
     </thead>
     <tbody id="history-body"></tbody>
   </table>
+</div><!-- end hist-history-section -->
+
+<!-- Import KPI Section -->
+<div id="hist-import-section" style="display:none;">
+  <div style="margin-bottom:1.5rem;">
+    <h3 style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.9rem;margin-bottom:0.5rem;">Import Previous KPI Data</h3>
+    <p style="font-size:0.72rem;color:var(--muted);line-height:1.8;">Upload your KPI export CSV directly from your work system — no changes needed.<br>
+    The importer automatically detects the format and groups repairs and BERs by date and part.<br>
+    <span style="color:var(--green);">✓ COMP rows counted as repairs &nbsp;·&nbsp; BER rows counted as BER'd</span></p>
+  </div>
+
+  <div id="import-drop-zone" onclick="document.getElementById('import-file-input').click()"
+    style="border:2px dashed var(--border);border-radius:6px;padding:2.5rem;text-align:center;cursor:pointer;transition:border-color 0.2s;margin-bottom:1.5rem;">
+    <input type="file" id="import-file-input" accept=".csv" style="display:none;" onchange="handleImportFile(this)"/>
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.9rem;margin-bottom:0.5rem;">Click to upload CSV</div>
+    <div style="font-size:0.7rem;color:var(--muted);">or drag and drop your KPI file here</div>
+  </div>
+
+  <div id="import-preview" style="display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+      <div>
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.85rem;" id="import-preview-title">Preview</div>
+        <div style="font-size:0.68rem;color:var(--muted);" id="import-preview-sub"></div>
+      </div>
+      <div style="display:flex;gap:0.75rem;">
+        <button onclick="clearImportPreview()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--muted);border:1px solid var(--border);">Clear</button>
+        <button onclick="confirmImport()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);">Import All</button>
+      </div>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:0.72rem;">
+      <thead>
+        <tr style="background:var(--surface2);border-bottom:2px solid var(--border);">
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:left;">Date</th>
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:left;">Part ID</th>
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Repairs</th>
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">BER</th>
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Class</th>
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Earned</th>
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.6rem 0.8rem;text-align:center;">Status</th>
+        </tr>
+      </thead>
+      <tbody id="import-preview-body"></tbody>
+    </table>
+  </div>
+
+  <div id="import-error" style="display:none;color:var(--accent);font-size:0.78rem;padding:1rem;background:rgba(232,82,58,0.1);border-radius:4px;"></div>
 </div>
+
+</div><!-- end history-wrap -->
 
 <!-- Add Part Modal -->
 <div id="modal-overlay">
@@ -1242,6 +1305,156 @@ function incrementHistoryEntry(date, key) {
     entry.earned = (val * entry.count) + berEarned;
     return entry;
   });
+  // If today, also sync ticks ref
+  if (date === TODAY) {
+    const tickKey = key.startsWith('ber_') ? null : key;
+    if (tickKey) {
+      TICKS_REF.child(tickKey).transaction(t => {
+        if (!t) return { count: 1 };
+        return { count: (t.count || 0) + 1 };
+      });
+    }
+  }
+}
+
+// Import KPI functions
+let importData = [];
+
+function switchHistorySub(sub, btn) {
+  document.querySelectorAll('.hist-sub-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('hist-history-section').style.display = sub === 'history' ? 'block' : 'none';
+  document.getElementById('hist-import-section').style.display = sub === 'import' ? 'block' : 'none';
+}
+
+function handleImportFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      parseImportCSV(e.target.result);
+    } catch(err) {
+      showImportError('Error reading file: ' + err.message);
+    }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function parseImportCSV(text) {
+  const lines = text.trim().split(/
+?
+/);
+  if (lines.length < 2) { showImportError('CSV must have a header row and at least one data row.'); return; }
+
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
+  const dateIdx = headers.findIndex(h => h === 'date');
+  const partIdx = headers.findIndex(h => h.includes('part'));
+  const repIdx = headers.findIndex(h => h.includes('repair') || h === 'repairs' || h === 'ticked' || h === 'count');
+  const berIdx = headers.findIndex(h => h === 'ber');
+
+  if (dateIdx === -1 || partIdx === -1) {
+    showImportError('CSV must have "date" and "part_id" columns.');
+    return;
+  }
+
+  importData = [];
+  const errors = [];
+
+  lines.slice(1).forEach((line, i) => {
+    if (!line.trim()) return;
+    const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const date = cols[dateIdx];
+    const partId = cols[partIdx];
+    const repairs = repIdx !== -1 ? parseInt(cols[repIdx]) || 0 : 0;
+    const ber = berIdx !== -1 ? parseInt(cols[berIdx]) || 0 : 0;
+
+    if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      errors.push(`Row ${i+2}: invalid date "${date}" — use YYYY-MM-DD format`);
+      return;
+    }
+    if (!partId) { errors.push(`Row ${i+2}: missing part ID`); return; }
+    if (repairs === 0 && ber === 0) return;
+
+    const cls = (window.gradeMap || {})[partId] || '';
+    const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
+    const earned = (val * repairs) + (ber * 0.10);
+    importData.push({ date, partId, repairs, ber, cls, val, earned });
+  });
+
+  if (importData.length === 0 && errors.length > 0) {
+    showImportError(errors.join('<br>'));
+    return;
+  }
+
+  document.getElementById('import-error').style.display = 'none';
+  renderImportPreview(errors);
+}
+
+function renderImportPreview(errors) {
+  const preview = document.getElementById('import-preview');
+  const tbody = document.getElementById('import-preview-body');
+  preview.style.display = 'block';
+  document.getElementById('import-preview-title').textContent = `Preview — ${importData.length} entries`;
+  document.getElementById('import-preview-sub').textContent = errors.length ? `${errors.length} rows skipped due to errors` : 'All rows valid';
+
+  tbody.innerHTML = '';
+  importData.forEach((r, i) => {
+    const bg = i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
+    const d = new Date(r.date + 'T12:00:00');
+    const dateLabel = d.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="padding:0.4rem 0.8rem;background:${bg};font-size:0.7rem;color:var(--muted);">${dateLabel}</td>
+      <td style="padding:0.4rem 0.8rem;background:${bg};font-weight:600;">${r.partId}</td>
+      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;color:var(--green);font-weight:700;">${r.repairs || '—'}</td>
+      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;color:#c00000;font-weight:700;">${r.ber || '—'}</td>
+      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;" class="grade-${r.cls}">${r.cls || '—'}</td>
+      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;color:var(--green);">${r.earned ? '£' + r.earned.toFixed(2) : '—'}</td>
+      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;font-size:0.65rem;color:var(--green);">✓ Ready</td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function confirmImport() {
+  if (!importData.length || !currentUser) return;
+  const dayRef = HISTORY_REF;
+  let count = 0;
+  importData.forEach(r => {
+    const key = safeKey(r.partId);
+    const histKey = r.repairs > 0 ? key : `ber_${key}`;
+    dayRef.child(r.date).child(histKey).transaction(entry => {
+      if (!entry) {
+        return {
+          partId: r.partId, count: r.repairs, cls: r.cls, val: r.val,
+          earned: r.earned, berCount: r.ber, berEarned: r.ber * 0.10,
+          type: r.repairs > 0 ? 'tick' : 'ber'
+        };
+      }
+      // Merge with existing
+      entry.count = (entry.count || 0) + r.repairs;
+      entry.berCount = (entry.berCount || 0) + r.ber;
+      entry.berEarned = entry.berCount * 0.10;
+      entry.earned = (entry.val || r.val) * entry.count + entry.berEarned;
+      return entry;
+    });
+    count++;
+  });
+  clearImportPreview();
+  alert(`✓ ${count} entries imported successfully!`);
+  switchHistorySub('history', document.getElementById('sub-history'));
+}
+
+function clearImportPreview() {
+  importData = [];
+  document.getElementById('import-preview').style.display = 'none';
+  document.getElementById('import-file-input').value = '';
+}
+
+function showImportError(msg) {
+  const el = document.getElementById('import-error');
+  el.innerHTML = '⚠ ' + msg;
+  el.style.display = 'block';
 }
 
 function addBerToHistory(date, key) {
@@ -1254,6 +1467,14 @@ function addBerToHistory(date, key) {
     entry.earned = (val * (entry.count || 0)) + entry.berEarned;
     return entry;
   });
+  // If today, also sync BER ref
+  if (date === TODAY) {
+    const berKey = key.startsWith('ber_') ? key.slice(4) : key;
+    BER_REF.child(berKey).transaction(b => {
+      if (!b) return { count: 1 };
+      return { count: (b.count || 0) + 1 };
+    });
+  }
 }
 
 function removeBerFromHistory(date, key, currentCount, currentBer) {
@@ -1271,6 +1492,35 @@ function removeBerFromHistory(date, key, currentCount, currentBer) {
       return entry;
     });
   }
+  // If today, also sync BER ref so Completed Today and Priority List update
+  if (date === TODAY) {
+    const berKey = key.startsWith('ber_') ? key.slice(4) : key;
+    BER_REF.child(berKey).transaction(b => {
+      if (!b) return null;
+      const newC = Math.max(0, (b.count || 0) - 1);
+      return newC === 0 ? null : { count: newC };
+    });
+  }
+}
+
+function formatHistoryDate(dateStr) {
+  if (!dateStr) return dateStr;
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = d.toLocaleDateString('en-GB', { weekday: 'short' });
+  const formatted = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const isToday = dateStr === TODAY;
+  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+  const label = isToday ? ' · Today' : '';
+  return `${day}, ${formatted}${label}`;
+}
+
+function getDateRowStyle(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+  const isToday = dateStr === TODAY;
+  if (isToday) return 'color: var(--green);';
+  if (isWeekend) return 'color: var(--accent);';
+  return 'color: var(--muted);';
 }
 
 function renderHistory() {
@@ -1307,7 +1557,7 @@ function renderHistory() {
     const berLabel = berCount > 0 ? `<span style="color:#c00000;font-weight:700;">${berCount} BER</span>` : '—';
     const tr = document.createElement('tr');
     tr.innerHTML = `
-      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};font-size:0.7rem;color:var(--muted);">${e.date}</td>
+      <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};font-size:0.7rem;${getDateRowStyle(e.date)}">${formatHistoryDate(e.date)}</td>
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};font-weight:600;">${e.partId || ''}</td>
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">${tickLabel}</td>
       <td style="padding:0.4rem 0.8rem;border-bottom:1px solid rgba(255,255,255,0.03);background:${bg};text-align:center;">${berLabel}</td>

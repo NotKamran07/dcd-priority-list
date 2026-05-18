@@ -1781,7 +1781,30 @@ function switchTab(tab, btn) {
 function renderCompleted() {
   const tbody = document.getElementById('completed-body');
   tbody.innerHTML = '';
+  // Parts from outputRows that have ticks/BERs
   const doneRows = outputRows.filter(r => getTickCount(r['Part ID']) > 0 || getBerCount(r['Part ID']) > 0);
+
+  // Also include manually added parts from today's history that aren't in outputRows
+  if (historyData && historyData[TODAY]) {
+    const outputPartIds = new Set(outputRows.map(r => r['Part ID']));
+    Object.values(historyData[TODAY]).forEach(entry => {
+      if (!entry || !entry.partId) return;
+      if (outputPartIds.has(entry.partId)) return; // already in list
+      if ((entry.count || 0) === 0 && (entry.berCount || 0) === 0) return;
+      // Add a synthetic row for this manual part
+      doneRows.push({
+        Priority: 2,
+        'Part ID': entry.partId,
+        'Repair Team': 'Manual',
+        'Rep Req': 0,
+        'Open Orders': '',
+        'Total Qty': 0,
+        'Part Class': entry.cls || '',
+        Value: entry.val || 0,
+        _manual: true
+      });
+    });
+  }
 
   if (doneRows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="10" class="empty-done">No parts completed yet today</td></tr>';

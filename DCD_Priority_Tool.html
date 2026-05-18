@@ -1255,10 +1255,7 @@ function updateHistoryCount() {
 }
 
 function saveToHistory() {
-  console.log('[saveToHistory] called. HISTORY_REF:', !!HISTORY_REF, 'outputRows:', outputRows.length, 'ticks:', JSON.stringify(ticks));
-  if (!HISTORY_REF || outputRows.length === 0) {
-    return;
-  }
+  if (!HISTORY_REF || outputRows.length === 0) return;
   const dayRef = HISTORY_REF.child(TODAY);
 
   // Use transactions so we never accidentally overwrite a manually decremented value
@@ -1313,6 +1310,21 @@ function saveToHistory() {
       return existing;
     });
   });
+
+  // Cleanup: remove today's history entries that no longer have any ticks or BERs
+  if (historyData && historyData[TODAY]) {
+    Object.keys(historyData[TODAY]).forEach(histKey => {
+      const isBerEntry = histKey.startsWith('ber_');
+      const tickKey = isBerEntry ? histKey.slice(4) : histKey;
+      const hasTick = ticks[tickKey] && (typeof ticks[tickKey] === 'object' ? ticks[tickKey].count > 0 : ticks[tickKey]);
+      const hasBer = bers[tickKey] && (typeof bers[tickKey] === 'object' ? bers[tickKey].count > 0 : false);
+      if (isBerEntry && !hasBer) {
+        dayRef.child(histKey).remove();
+      } else if (!isBerEntry && !hasTick && !hasBer) {
+        dayRef.child(histKey).remove();
+      }
+    });
+  }
 }
 
 function decrementHistoryEntry(date, key, currentCount, currentBer) {

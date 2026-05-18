@@ -611,6 +611,7 @@ const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG5
 
 let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, bers = {}, showDone = true, deptFilter = 'all', currentTab = 'main';
 let currentUser = null;
+let dataLoaded = false;
 let allUserTicks = {}; // all users' ticks for live view
 const USERS = {
   KamranIqbal:  { name: 'Kamran Iqbal',  initials: 'KI', color: '#e8523a' },
@@ -976,7 +977,7 @@ function startFirebaseListeners() {
     if (currentTab === 'main') renderTable();
     else if (currentTab === 'done') renderCompleted();
     else if (currentTab === 'history') renderHistory();
-    if (outputRows.length > 0) saveToHistory();
+    if (dataLoaded) saveToHistory();
   });
 
   BER_REF.on('value', snap => {
@@ -984,7 +985,7 @@ function startFirebaseListeners() {
     if (currentTab === 'main') renderTable();
     else if (currentTab === 'done') renderCompleted();
     else if (currentTab === 'history') renderHistory();
-    if (outputRows.length > 0) saveToHistory();
+    if (dataLoaded) saveToHistory();
   });
 
   HISTORY_REF.on('value', snap => {
@@ -1076,6 +1077,9 @@ async function loadAll() {
     document.getElementById('live-status').style.display = 'block';
     sortCol = null;
     renderTable();
+    dataLoaded = true;
+    // Now that outputRows is populated, save any existing ticks/BERs to history
+    saveToHistory();
   } catch(err) {
     document.getElementById('loading-bar').style.display = 'none';
     document.getElementById('error-msg').style.display = 'block';
@@ -1240,7 +1244,7 @@ function updateHistoryCount() {
 }
 
 function saveToHistory() {
-  if (!HISTORY_REF) return;
+  if (!HISTORY_REF || outputRows.length === 0) return;
   const dayRef = HISTORY_REF.child(TODAY);
 
   // Use transactions so we never accidentally overwrite a manually decremented value

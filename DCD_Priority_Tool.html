@@ -498,6 +498,7 @@
     <div class="stat"><span class="stat-label">Days Worked</span><span class="stat-value" id="hist-days-worked" style="color:var(--accent2);">0</span></div>
     <div class="stat"><span class="stat-label">Avg Repairs / Day</span><span class="stat-value" id="hist-avg-repairs" style="color:var(--text);">0</span></div>
     <button onclick="openModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.45rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);">+ Add Part</button>
+    <button onclick="recalculateHistory()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent2);border:1px solid var(--accent2);">↻ Recalculate Values</button>
     <button onclick="clearHistory()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Clear History</button>
   </div>
   <table style="width:100%;border-collapse:collapse;font-size:0.72rem;">
@@ -1675,6 +1676,40 @@ function renderHistory() {
   document.getElementById('hist-total-earned').textContent = `£${totalEarned.toFixed(2)}`;
   document.getElementById('hist-days-worked').textContent = uniqueDays;
   document.getElementById('hist-avg-repairs').textContent = avgRepairs;
+}
+
+function recalculateHistory() {
+  if (!HISTORY_REF) return;
+  if (!confirm('Recalculate all historical earnings using the current part gradings? This will update all values in your history.')) return;
+
+  const gradeMap = window.gradeMap || {};
+  let updateCount = 0;
+
+  Object.keys(historyData).forEach(date => {
+    const day = historyData[date];
+    if (!day) return;
+    Object.keys(day).forEach(key => {
+      const entry = day[key];
+      if (!entry || !entry.partId) return;
+
+      const cls = gradeMap[entry.partId] || entry.cls || '';
+      const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
+      const count = entry.count || 0;
+      const berCount = entry.berCount || 0;
+      const berEarned = berCount * 0.10;
+      const earned = (val * count) + berEarned;
+
+      // Only update if values have changed
+      if (cls !== entry.cls || val !== entry.val || earned !== entry.earned) {
+        HISTORY_REF.child(date).child(key).update({ cls, val, earned, berEarned });
+        updateCount++;
+      }
+    });
+  });
+
+  setTimeout(() => {
+    alert('✓ Recalculation complete — ' + updateCount + ' entries updated with current grades and values.');
+  }, 500);
 }
 
 function clearHistory() {

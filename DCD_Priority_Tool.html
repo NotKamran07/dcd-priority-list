@@ -276,7 +276,8 @@
   .user-avatar {
     width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center;
     justify-content: center; font-family: 'Syne', sans-serif; font-weight: 800;
-    font-size: 1.3rem; color: white;
+    font-size: 1rem; color: white; overflow: hidden; flex-shrink: 0;
+    letter-spacing: -0.02em;
   }
   .user-card-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.82rem; color: var(--text); }
   .user-card-sub { font-size: 0.65rem; color: var(--muted); }
@@ -1516,8 +1517,9 @@ function confirmImport() {
       return entry;
     });
   });
+  const importedCount = importData.length;
   clearImportPreview();
-  alert('✓ ' + importData.length + ' entries imported successfully!');
+  alert('✓ ' + importedCount + ' entries imported successfully!');
   switchHistorySub('history', document.getElementById('sub-history'));
 }
 
@@ -1633,10 +1635,16 @@ function renderHistory() {
     tbody.appendChild(tr);
   });
 
-  // Only count days where actual work was done (repairs or BERs > 0)
-  const daysWithWork = new Set(
-    allEntries.filter(e => (e.count || 0) > 0 || (e.berCount || 0) > 0).map(e => e.date)
-  );
+  // Only count days where at least one entry has actual work (repairs or BERs > 0)
+  const daysWithWork = new Set();
+  Object.keys(historyData).forEach(date => {
+    const day = historyData[date];
+    if (!day) return;
+    const hasWork = Object.values(day).some(entry =>
+      (entry.count || 0) > 0 || (entry.berCount || 0) > 0
+    );
+    if (hasWork) daysWithWork.add(date);
+  });
   const uniqueDays = daysWithWork.size;
   const avgRepairs = uniqueDays > 0 ? (totalRepairs / uniqueDays).toFixed(1) : '0';
   document.getElementById('hist-total-parts').textContent = allEntries.length;

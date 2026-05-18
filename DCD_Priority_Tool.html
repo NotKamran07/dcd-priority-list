@@ -1288,18 +1288,23 @@ function saveToHistory() {
 function decrementHistoryEntry(date, key, currentCount, currentBer) {
   if (!key) return;
   const newCount = currentCount - 1;
+  // Update history
   if (newCount <= 0 && currentBer <= 0) {
-    // Remove entirely if both repairs and BER hit 0
     HISTORY_REF.child(date).child(key).remove();
   } else {
-    // Just reduce the count and recalculate earned
     HISTORY_REF.child(date).child(key).transaction(entry => {
       if (!entry) return entry;
       entry.count = Math.max(0, (entry.count || 0) - 1);
-      const val = entry.val || 0;
-      const berEarned = entry.berEarned || 0;
-      entry.earned = (val * entry.count) + berEarned;
+      entry.earned = ((entry.val || 0) * entry.count) + (entry.berEarned || 0);
       return entry;
+    });
+  }
+  // Sync to ticks/BER refs if today
+  if (date === TODAY && !key.startsWith('ber_')) {
+    TICKS_REF.child(key).transaction(t => {
+      if (!t) return null;
+      const newC = Math.max(0, (t.count || 0) - 1);
+      return newC <= 0 ? null : { count: newC };
     });
   }
 }
@@ -1309,203 +1314,14 @@ function incrementHistoryEntry(date, key) {
   HISTORY_REF.child(date).child(key).transaction(entry => {
     if (!entry) return entry;
     entry.count = (entry.count || 0) + 1;
-    const val = entry.val || 0;
-    const berEarned = entry.berEarned || 0;
-    entry.earned = (val * entry.count) + berEarned;
+    entry.earned = ((entry.val || 0) * entry.count) + (entry.berEarned || 0);
     return entry;
   });
-  // If today, also sync ticks ref
-  if (date === TODAY) {
-    const tickKey = key.startsWith('ber_') ? null : key;
-    if (tickKey) {
-      TICKS_REF.child(tickKey).transaction(t => {
-        if (!t) return { count: 1 };
-        return { count: (t.count || 0) + 1 };
-      });
-    }
-  }
-}
-
-// Import KPI functions
-let importData = [];
-
-function switchHistorySub(sub, btn) {
-  document.querySelectorAll('.hist-sub-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  document.getElementById('hist-history-section').style.display = sub === 'history' ? 'block' : 'none';
-  document.getElementById('hist-import-section').style.display = sub === 'import' ? 'block' : 'none';
-}
-
-function handleImportFile(input) {
-  const file = input.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    try {
-      parseImportCSV(e.target.result);
-    } catch(err) {
-      showImportError('Error reading file: ' + err.message);
-    }
-  };
-  reader.readAsText(file, 'utf-8');
-}
-
-function parseImportCSV(text) {
-  text = text.replace(/^\uFEFF/, '');
-  const lines = text.trim().split(/\r?\n/);
-  if (lines.length < 2) { showImportError('CSV must have a header row and at least one data row.'); return; }
-
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
-  const isKpiFormat = headers.includes('unit_status') && headers.includes('createdtime');
-
-  let dateIdx, partIdx, qtyIdx, statusIdx;
-  if (isKpiFormat) {
-    dateIdx   = headers.indexOf('createdtime');
-    partIdx   = headers.indexOf('part_id');
-    qtyIdx    = headers.indexOf('quantity');
-    statusIdx = headers.indexOf('unit_status');
-  } else {
-    dateIdx   = headers.findIndex(h => h === 'date');
-    partIdx   = headers.findIndex(h => h.includes('part'));
-    qtyIdx    = headers.findIndex(h => h.includes('repair') || h === 'repairs' || h === 'count');
-    statusIdx = -1;
-  }
-
-  if (dateIdx === -1 || partIdx === -1) {
-    showImportError('Could not find required columns. Expected "part_id" and "CreatedTime" (KPI format) or "date" and "part_id" (custom format).');
-    return;
-  }
-
-  const grouped = {};
-  const errors = [];
-
-  lines.slice(1).forEach((line, i) => {
-    if (!line.trim()) return;
-    const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-    const rawDate = (cols[dateIdx] || '').trim();
-    const partId  = (cols[partIdx] || '').trim();
-    const qty     = parseInt(cols[qtyIdx]) || 0;
-    const status  = statusIdx !== -1 ? (cols[statusIdx] || 'COMP').trim().toUpperCase() : 'COMP';
-
-    if (!partId) return;
-
-    let isoDate = '';
-    if (rawDate.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-      const [dd, mm, yyyy] = rawDate.split('/');
-      isoDate = yyyy + '-' + mm + '-' + dd;
-    } else if (rawDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      isoDate = rawDate;
-    } else {
-      errors.push('Row ' + (i+2) + ': unrecognised date "' + rawDate + '"');
-      return;
-    }
-
-    const key = isoDate + '__' + partId + '__' + status;
-    if (!grouped[key]) grouped[key] = { date: isoDate, partId, status, qty: 0 };
-    grouped[key].qty += qty;
-  });
-
-  importData = Object.values(grouped).map(g => {
-    const isComp = g.status === 'COMP';
-    const cls = (window.gradeMap || {})[g.partId] || '';
-    const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
-    const repairs = isComp ? g.qty : 0;
-    const ber = isComp ? 0 : g.qty;
-    const earned = (val * repairs) + (ber * 0.10);
-    return { date: g.date, partId: g.partId, repairs, ber, cls, val, earned };
-  }).filter(r => r.repairs > 0 || r.ber > 0)
-    .sort((a, b) => a.date.localeCompare(b.date) || a.partId.localeCompare(b.partId));
-
-  if (importData.length === 0) {
-    showImportError('No valid data rows found. ' + (errors.length ? errors[0] : ''));
-    return;
-  }
-
-  document.getElementById('import-error').style.display = 'none';
-  renderImportPreview(errors);
-}
-function renderImportPreview(errors) {
-  const preview = document.getElementById('import-preview');
-  const tbody = document.getElementById('import-preview-body');
-  preview.style.display = 'block';
-  document.getElementById('import-preview-title').textContent = `Preview — ${importData.length} entries`;
-  document.getElementById('import-preview-sub').textContent = errors.length ? `${errors.length} rows skipped due to errors` : 'All rows valid';
-
-  tbody.innerHTML = '';
-  importData.forEach((r, i) => {
-    const bg = i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
-    const d = new Date(r.date + 'T12:00:00');
-    const dateLabel = d.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td style="padding:0.4rem 0.8rem;background:${bg};font-size:0.7rem;color:var(--muted);">${dateLabel}</td>
-      <td style="padding:0.4rem 0.8rem;background:${bg};font-weight:600;">${r.partId}</td>
-      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;color:var(--green);font-weight:700;">${r.repairs || '—'}</td>
-      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;color:#c00000;font-weight:700;">${r.ber || '—'}</td>
-      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;" class="grade-${r.cls}">${r.cls || '—'}</td>
-      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;color:var(--green);">${r.earned ? '£' + r.earned.toFixed(2) : '—'}</td>
-      <td style="padding:0.4rem 0.8rem;background:${bg};text-align:center;font-size:0.65rem;color:var(--green);">✓ Ready</td>`;
-    tbody.appendChild(tr);
-  });
-}
-
-function confirmImport() {
-  if (!importData.length || !currentUser) return;
-  const dayRef = HISTORY_REF;
-  let count = 0;
-  importData.forEach(r => {
-    const key = safeKey(r.partId);
-    const histKey = r.repairs > 0 ? key : `ber_${key}`;
-    dayRef.child(r.date).child(histKey).transaction(entry => {
-      if (!entry) {
-        return {
-          partId: r.partId, count: r.repairs, cls: r.cls, val: r.val,
-          earned: r.earned, berCount: r.ber, berEarned: r.ber * 0.10,
-          type: r.repairs > 0 ? 'tick' : 'ber'
-        };
-      }
-      // Merge with existing
-      entry.count = (entry.count || 0) + r.repairs;
-      entry.berCount = (entry.berCount || 0) + r.ber;
-      entry.berEarned = entry.berCount * 0.10;
-      entry.earned = (entry.val || r.val) * entry.count + entry.berEarned;
-      return entry;
-    });
-    count++;
-  });
-  clearImportPreview();
-  alert(`✓ ${count} entries imported successfully!`);
-  switchHistorySub('history', document.getElementById('sub-history'));
-}
-
-function clearImportPreview() {
-  importData = [];
-  document.getElementById('import-preview').style.display = 'none';
-  document.getElementById('import-file-input').value = '';
-}
-
-function showImportError(msg) {
-  const el = document.getElementById('import-error');
-  el.innerHTML = '⚠ ' + msg;
-  el.style.display = 'block';
-}
-
-function addBerToHistory(date, key) {
-  if (!key) return;
-  HISTORY_REF.child(date).child(key).transaction(entry => {
-    if (!entry) return entry;
-    entry.berCount = (entry.berCount || 0) + 1;
-    entry.berEarned = entry.berCount * 0.10;
-    const val = entry.val || 0;
-    entry.earned = (val * (entry.count || 0)) + entry.berEarned;
-    return entry;
-  });
-  // If today, also sync BER ref
-  if (date === TODAY) {
-    const berKey = key.startsWith('ber_') ? key.slice(4) : key;
-    BER_REF.child(berKey).transaction(b => {
-      if (!b) return { count: 1 };
-      return { count: (b.count || 0) + 1 };
+  // Sync to ticks ref if today
+  if (date === TODAY && !key.startsWith('ber_')) {
+    TICKS_REF.child(key).transaction(t => {
+      if (!t) return { count: 1 };
+      return { count: (t.count || 0) + 1 };
     });
   }
 }
@@ -1520,41 +1336,40 @@ function removeBerFromHistory(date, key, currentCount, currentBer) {
       if (!entry) return entry;
       entry.berCount = Math.max(0, (entry.berCount || 0) - 1);
       entry.berEarned = entry.berCount * 0.10;
-      const val = entry.val || 0;
-      entry.earned = (val * (entry.count || 0)) + entry.berEarned;
+      entry.earned = ((entry.val || 0) * (entry.count || 0)) + entry.berEarned;
       return entry;
     });
   }
-  // If today, also sync BER ref so Completed Today and Priority List update
+  // Sync to BER ref if today
   if (date === TODAY) {
     const berKey = key.startsWith('ber_') ? key.slice(4) : key;
     BER_REF.child(berKey).transaction(b => {
       if (!b) return null;
       const newC = Math.max(0, (b.count || 0) - 1);
-      return newC === 0 ? null : { count: newC };
+      return newC <= 0 ? null : { count: newC };
     });
   }
 }
 
-function formatHistoryDate(dateStr) {
-  if (!dateStr) return dateStr;
-  const d = new Date(dateStr + 'T12:00:00');
-  const day = d.toLocaleDateString('en-GB', { weekday: 'short' });
-  const formatted = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
-  const isToday = dateStr === TODAY;
-  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-  const label = isToday ? ' · Today' : '';
-  return `${day}, ${formatted}${label}`;
+function addBerToHistory(date, key) {
+  if (!key) return;
+  HISTORY_REF.child(date).child(key).transaction(entry => {
+    if (!entry) return entry;
+    entry.berCount = (entry.berCount || 0) + 1;
+    entry.berEarned = entry.berCount * 0.10;
+    entry.earned = ((entry.val || 0) * (entry.count || 0)) + entry.berEarned;
+    return entry;
+  });
+  // Sync to BER ref if today
+  if (date === TODAY) {
+    const berKey = key.startsWith('ber_') ? key.slice(4) : key;
+    BER_REF.child(berKey).transaction(b => {
+      if (!b) return { count: 1 };
+      return { count: (b.count || 0) + 1 };
+    });
+  }
 }
 
-function getDateRowStyle(dateStr) {
-  const d = new Date(dateStr + 'T12:00:00');
-  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
-  const isToday = dateStr === TODAY;
-  if (isToday) return 'color: var(--green);';
-  if (isWeekend) return 'color: var(--accent);';
-  return 'color: var(--muted);';
-}
 
 function renderHistory() {
   const tbody = document.getElementById('history-body');
@@ -1616,7 +1431,11 @@ function renderHistory() {
     tbody.appendChild(tr);
   });
 
-  const uniqueDays = new Set(allEntries.map(e => e.date)).size;
+  // Only count days where actual work was done (repairs or BERs > 0)
+  const daysWithWork = new Set(
+    allEntries.filter(e => (e.count || 0) > 0 || (e.berCount || 0) > 0).map(e => e.date)
+  );
+  const uniqueDays = daysWithWork.size;
   const avgRepairs = uniqueDays > 0 ? (totalRepairs / uniqueDays).toFixed(1) : '0';
   document.getElementById('hist-total-parts').textContent = allEntries.length;
   document.getElementById('hist-total-repairs').textContent = totalRepairs;

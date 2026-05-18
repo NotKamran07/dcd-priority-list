@@ -1351,55 +1351,79 @@ function handleImportFile(input) {
 }
 
 function parseImportCSV(text) {
-  const lines = text.trim().split(/
-?
-/);
+  text = text.replace(/^\uFEFF/, '');
+  const lines = text.trim().split(/\r?\n/);
   if (lines.length < 2) { showImportError('CSV must have a header row and at least one data row.'); return; }
 
-  const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-  const dateIdx = headers.findIndex(h => h === 'date');
-  const partIdx = headers.findIndex(h => h.includes('part'));
-  const repIdx = headers.findIndex(h => h.includes('repair') || h === 'repairs' || h === 'ticked' || h === 'count');
-  const berIdx = headers.findIndex(h => h === 'ber');
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
+  const isKpiFormat = headers.includes('unit_status') && headers.includes('createdtime');
+
+  let dateIdx, partIdx, qtyIdx, statusIdx;
+  if (isKpiFormat) {
+    dateIdx   = headers.indexOf('createdtime');
+    partIdx   = headers.indexOf('part_id');
+    qtyIdx    = headers.indexOf('quantity');
+    statusIdx = headers.indexOf('unit_status');
+  } else {
+    dateIdx   = headers.findIndex(h => h === 'date');
+    partIdx   = headers.findIndex(h => h.includes('part'));
+    qtyIdx    = headers.findIndex(h => h.includes('repair') || h === 'repairs' || h === 'count');
+    statusIdx = -1;
+  }
 
   if (dateIdx === -1 || partIdx === -1) {
-    showImportError('CSV must have "date" and "part_id" columns.');
+    showImportError('Could not find required columns. Expected "part_id" and "CreatedTime" (KPI format) or "date" and "part_id" (custom format).');
     return;
   }
 
-  importData = [];
+  const grouped = {};
   const errors = [];
 
   lines.slice(1).forEach((line, i) => {
     if (!line.trim()) return;
     const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
-    const date = cols[dateIdx];
-    const partId = cols[partIdx];
-    const repairs = repIdx !== -1 ? parseInt(cols[repIdx]) || 0 : 0;
-    const ber = berIdx !== -1 ? parseInt(cols[berIdx]) || 0 : 0;
+    const rawDate = (cols[dateIdx] || '').trim();
+    const partId  = (cols[partIdx] || '').trim();
+    const qty     = parseInt(cols[qtyIdx]) || 0;
+    const status  = statusIdx !== -1 ? (cols[statusIdx] || 'COMP').trim().toUpperCase() : 'COMP';
 
-    if (!date.match(/^\d{4}-\d{2}-\d{2}$/)) {
-      errors.push(`Row ${i+2}: invalid date "${date}" — use YYYY-MM-DD format`);
+    if (!partId) return;
+
+    let isoDate = '';
+    if (rawDate.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+      const [dd, mm, yyyy] = rawDate.split('/');
+      isoDate = yyyy + '-' + mm + '-' + dd;
+    } else if (rawDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      isoDate = rawDate;
+    } else {
+      errors.push('Row ' + (i+2) + ': unrecognised date "' + rawDate + '"');
       return;
     }
-    if (!partId) { errors.push(`Row ${i+2}: missing part ID`); return; }
-    if (repairs === 0 && ber === 0) return;
 
-    const cls = (window.gradeMap || {})[partId] || '';
-    const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
-    const earned = (val * repairs) + (ber * 0.10);
-    importData.push({ date, partId, repairs, ber, cls, val, earned });
+    const key = isoDate + '__' + partId + '__' + status;
+    if (!grouped[key]) grouped[key] = { date: isoDate, partId, status, qty: 0 };
+    grouped[key].qty += qty;
   });
 
-  if (importData.length === 0 && errors.length > 0) {
-    showImportError(errors.join('<br>'));
+  importData = Object.values(grouped).map(g => {
+    const isComp = g.status === 'COMP';
+    const cls = (window.gradeMap || {})[g.partId] || '';
+    const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
+    const repairs = isComp ? g.qty : 0;
+    const ber = isComp ? 0 : g.qty;
+    const earned = (val * repairs) + (ber * 0.10);
+    return { date: g.date, partId: g.partId, repairs, ber, cls, val, earned };
+  }).filter(r => r.repairs > 0 || r.ber > 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.partId.localeCompare(b.partId));
+
+  if (importData.length === 0) {
+    showImportError('No valid data rows found. ' + (errors.length ? errors[0] : ''));
     return;
   }
 
   document.getElementById('import-error').style.display = 'none';
   renderImportPreview(errors);
 }
-
 function renderImportPreview(errors) {
   const preview = document.getElementById('import-preview');
   const tbody = document.getElementById('import-preview-body');

@@ -925,6 +925,9 @@ function confirmAddPart(type) {
   }
 
   closeModal();
+  // Immediately re-render the current tab so the part appears without needing to switch tabs
+  if (currentTab === 'done') renderCompleted();
+  else if (currentTab === 'history') renderHistory();
 }
 
 // Close modal on overlay click

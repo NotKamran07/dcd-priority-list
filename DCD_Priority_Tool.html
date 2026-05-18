@@ -1240,47 +1240,59 @@ function updateHistoryCount() {
 }
 
 function saveToHistory() {
+  if (!HISTORY_REF) return;
   const dayRef = HISTORY_REF.child(TODAY);
 
-  // Save ticked parts
+  // Use transactions so we never accidentally overwrite a manually decremented value
+  // Only update if tick count has INCREASED or entry doesn't exist yet
   Object.keys(ticks).forEach(key => {
     const tick = ticks[key];
     const count = typeof tick === 'object' ? (tick.count || 0) : 0;
-    if (count === 0) return;
+    if (count === 0) {
+      // Remove from history if ticks go to 0
+      dayRef.child(key).remove();
+      return;
+    }
     const row = outputRows.find(r => safeKey(r['Part ID']) === key);
     const cls = row ? (row['Part Class'] || '') : '';
     const val = row ? (typeof row.Value === 'number' ? row.Value : 0) : 0;
     const berCount = getBerCount(row ? row['Part ID'] : key);
     const berEarned = berCount * 0.10;
-    dayRef.child(key).set({
-      partId: row ? row['Part ID'] : key,
-      count,
-      cls,
-      val,
-      earned: (val * count) + berEarned,
-      berCount,
-      berEarned,
-      type: 'tick'
+    dayRef.child(key).transaction(existing => {
+      // Only set if not exists, or count has increased
+      if (!existing) {
+        return { partId: row ? row['Part ID'] : key, count, cls, val, earned: (val * count) + berEarned, berCount, berEarned, type: 'tick' };
+      }
+      // If current firebase count > our local count, don't overwrite (someone decremented via history tab)
+      if (existing.count > count) return existing;
+      existing.count = count;
+      existing.berCount = berCount;
+      existing.berEarned = berEarned;
+      existing.earned = (val * count) + berEarned;
+      return existing;
     });
   });
 
-  // Save BER-only parts (not already ticked)
+  // Save BER-only parts
   Object.keys(bers).forEach(key => {
-    if (ticks[key]) return; // already saved above
+    if (ticks[key]) return;
     const ber = bers[key];
     const berCount = typeof ber === 'object' ? (ber.count || 0) : 0;
-    if (berCount === 0) return;
+    if (berCount === 0) {
+      dayRef.child('ber_' + key).remove();
+      return;
+    }
     const row = outputRows.find(r => safeKey(r['Part ID']) === key);
     const cls = row ? (row['Part Class'] || '') : '';
-    dayRef.child(`ber_${key}`).set({
-      partId: row ? row['Part ID'] : key,
-      count: 0,
-      cls,
-      val: 0,
-      earned: berCount * 0.10,
-      berCount,
-      berEarned: berCount * 0.10,
-      type: 'ber'
+    dayRef.child('ber_' + key).transaction(existing => {
+      if (!existing) {
+        return { partId: row ? row['Part ID'] : key, count: 0, cls, val: 0, earned: berCount * 0.10, berCount, berEarned: berCount * 0.10, type: 'ber' };
+      }
+      if (existing.berCount > berCount) return existing;
+      existing.berCount = berCount;
+      existing.berEarned = berCount * 0.10;
+      existing.earned = (existing.val || 0) * (existing.count || 0) + existing.berEarned;
+      return existing;
     });
   });
 }

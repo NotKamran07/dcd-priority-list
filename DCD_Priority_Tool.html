@@ -990,6 +990,7 @@ function startFirebaseListeners() {
 
   HISTORY_REF.on('value', snap => {
     historyData = snap.val() || {};
+    console.log('[HISTORY_REF listener] data received:', JSON.stringify(historyData));
     updateHistoryCount();
     if (currentTab === 'history') renderHistory();
   });
@@ -1078,6 +1079,7 @@ async function loadAll() {
     sortCol = null;
     renderTable();
     dataLoaded = true;
+    console.log('[loadAll] complete. dataLoaded=true, outputRows:', outputRows.length, 'ticks:', JSON.stringify(ticks), 'HISTORY_REF:', !!HISTORY_REF);
     // Now that outputRows is populated, save any existing ticks/BERs to history
     saveToHistory();
   } catch(err) {
@@ -1244,7 +1246,11 @@ function updateHistoryCount() {
 }
 
 function saveToHistory() {
-  if (!HISTORY_REF || outputRows.length === 0) return;
+  console.log('[saveToHistory] called. HISTORY_REF:', !!HISTORY_REF, 'outputRows:', outputRows.length, 'ticks:', JSON.stringify(ticks));
+  if (!HISTORY_REF || outputRows.length === 0) {
+    console.log('[saveToHistory] SKIPPED - missing ref or no outputRows');
+    return;
+  }
   const dayRef = HISTORY_REF.child(TODAY);
 
   // Use transactions so we never accidentally overwrite a manually decremented value
@@ -1543,6 +1549,7 @@ function addBerToHistory(date, key) {
 
 
 function renderHistory() {
+  console.log('[renderHistory] historyData:', JSON.stringify(historyData));
   const tbody = document.getElementById('history-body');
   tbody.innerHTML = '';
 

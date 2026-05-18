@@ -1351,6 +1351,161 @@ function removeBerFromHistory(date, key, currentCount, currentBer) {
   }
 }
 
+// ── Import KPI functions ──────────────────────────────────────────────────────
+let importData = [];
+
+function switchHistorySub(sub, btn) {
+  document.querySelectorAll('.hist-sub-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('hist-history-section').style.display = sub === 'history' ? 'block' : 'none';
+  document.getElementById('hist-import-section').style.display = sub === 'import' ? 'block' : 'none';
+}
+
+function handleImportFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try { parseImportCSV(e.target.result); }
+    catch(err) { showImportError('Error reading file: ' + err.message); }
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function parseImportCSV(text) {
+  text = text.replace(/^\uFEFF/, '');
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) { showImportError('CSV must have a header row and at least one data row.'); return; }
+
+  const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/^"|"$/g, ''));
+  const isKpiFormat = headers.includes('unit_status') && headers.includes('createdtime');
+
+  let dateIdx, partIdx, qtyIdx, statusIdx;
+  if (isKpiFormat) {
+    dateIdx   = headers.indexOf('createdtime');
+    partIdx   = headers.indexOf('part_id');
+    qtyIdx    = headers.indexOf('quantity');
+    statusIdx = headers.indexOf('unit_status');
+  } else {
+    dateIdx   = headers.findIndex(h => h === 'date');
+    partIdx   = headers.findIndex(h => h.includes('part'));
+    qtyIdx    = headers.findIndex(h => h.includes('repair') || h === 'repairs' || h === 'count');
+    statusIdx = -1;
+  }
+
+  if (dateIdx === -1 || partIdx === -1) {
+    showImportError('Could not find required columns. Expected "part_id" and "CreatedTime" (KPI format) or "date" and "part_id" (custom format).');
+    return;
+  }
+
+  const grouped = {};
+  const errors = [];
+
+  lines.slice(1).forEach((line, i) => {
+    if (!line.trim()) return;
+    const cols = line.split(',').map(c => c.trim().replace(/^"|"$/g, ''));
+    const rawDate = (cols[dateIdx] || '').trim();
+    const partId  = (cols[partIdx] || '').trim();
+    const qty     = parseInt(cols[qtyIdx]) || 0;
+    const status  = statusIdx !== -1 ? (cols[statusIdx] || 'COMP').trim().toUpperCase() : 'COMP';
+    if (!partId) return;
+
+    let isoDate = '';
+    const ddmmyyyy = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+    const yyyymmdd = /^(\d{4})-(\d{2})-(\d{2})$/;
+    if (ddmmyyyy.test(rawDate)) {
+      const m = rawDate.match(ddmmyyyy);
+      isoDate = m[3] + '-' + m[2] + '-' + m[1];
+    } else if (yyyymmdd.test(rawDate)) {
+      isoDate = rawDate;
+    } else {
+      errors.push('Row ' + (i+2) + ': unrecognised date "' + rawDate + '"');
+      return;
+    }
+
+    const key = isoDate + '__' + partId + '__' + status;
+    if (!grouped[key]) grouped[key] = { date: isoDate, partId, status, qty: 0 };
+    grouped[key].qty += qty;
+  });
+
+  importData = Object.values(grouped).map(g => {
+    const isComp = g.status === 'COMP';
+    const cls = (window.gradeMap || {})[g.partId] || '';
+    const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
+    const repairs = isComp ? g.qty : 0;
+    const ber = isComp ? 0 : g.qty;
+    const earned = (val * repairs) + (ber * 0.10);
+    return { date: g.date, partId: g.partId, repairs, ber, cls, val, earned };
+  }).filter(r => r.repairs > 0 || r.ber > 0)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.partId.localeCompare(b.partId));
+
+  if (importData.length === 0) {
+    showImportError('No valid data rows found. ' + (errors.length ? errors[0] : ''));
+    return;
+  }
+  document.getElementById('import-error').style.display = 'none';
+  renderImportPreview(errors);
+}
+
+function renderImportPreview(errors) {
+  const preview = document.getElementById('import-preview');
+  const tbody = document.getElementById('import-preview-body');
+  preview.style.display = 'block';
+  document.getElementById('import-preview-title').textContent = 'Preview — ' + importData.length + ' entries';
+  document.getElementById('import-preview-sub').textContent = errors.length ? errors.length + ' rows skipped due to errors' : 'All rows valid';
+  tbody.innerHTML = '';
+  importData.forEach((r, i) => {
+    const bg = i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
+    const d = new Date(r.date + 'T12:00:00');
+    const dateLabel = d.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td style="padding:0.4rem 0.8rem;background:' + bg + ';font-size:0.7rem;color:var(--muted);">' + dateLabel + '</td>' +
+      '<td style="padding:0.4rem 0.8rem;background:' + bg + ';font-weight:600;">' + r.partId + '</td>' +
+      '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;color:var(--green);font-weight:700;">' + (r.repairs || '—') + '</td>' +
+      '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;color:#c00000;font-weight:700;">' + (r.ber || '—') + '</td>' +
+      '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;" class="grade-' + r.cls + '">' + (r.cls || '—') + '</td>' +
+      '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;color:var(--green);">' + (r.earned ? '£' + r.earned.toFixed(2) : '—') + '</td>' +
+      '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;font-size:0.65rem;color:var(--green);">✓ Ready</td>';
+    tbody.appendChild(tr);
+  });
+}
+
+function confirmImport() {
+  if (!importData.length || !currentUser) return;
+  importData.forEach(r => {
+    const key = safeKey(r.partId);
+    const histKey = r.repairs > 0 ? key : ('ber_' + key);
+    HISTORY_REF.child(r.date).child(histKey).transaction(entry => {
+      if (!entry) {
+        return { partId: r.partId, count: r.repairs, cls: r.cls, val: r.val, earned: r.earned, berCount: r.ber, berEarned: r.ber * 0.10, type: r.repairs > 0 ? 'tick' : 'ber' };
+      }
+      entry.count = (entry.count || 0) + r.repairs;
+      entry.berCount = (entry.berCount || 0) + r.ber;
+      entry.berEarned = (entry.berCount) * 0.10;
+      entry.earned = ((entry.val || r.val) * entry.count) + entry.berEarned;
+      return entry;
+    });
+  });
+  clearImportPreview();
+  alert('✓ ' + importData.length + ' entries imported successfully!');
+  switchHistorySub('history', document.getElementById('sub-history'));
+}
+
+function clearImportPreview() {
+  importData = [];
+  document.getElementById('import-preview').style.display = 'none';
+  document.getElementById('import-file-input').value = '';
+}
+
+function showImportError(msg) {
+  const el = document.getElementById('import-error');
+  el.innerHTML = '⚠ ' + msg;
+  el.style.display = 'block';
+}
+
+// ── End Import KPI functions ──────────────────────────────────────────────────
+
 function addBerToHistory(date, key) {
   if (!key) return;
   HISTORY_REF.child(date).child(key).transaction(entry => {

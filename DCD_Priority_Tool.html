@@ -1548,6 +1548,24 @@ function addBerToHistory(date, key) {
 }
 
 
+function formatHistoryDate(dateStr) {
+  if (!dateStr) return dateStr;
+  const d = new Date(dateStr + 'T12:00:00');
+  const day = d.toLocaleDateString('en-GB', { weekday: 'short' });
+  const formatted = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const isToday = dateStr === TODAY;
+  return day + ', ' + formatted + (isToday ? ' · Today' : '');
+}
+
+function getDateRowStyle(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+  const isToday = dateStr === TODAY;
+  if (isToday) return 'color: var(--green);';
+  if (isWeekend) return 'color: var(--accent);';
+  return 'color: var(--muted);';
+}
+
 function renderHistory() {
   console.log('[renderHistory] historyData:', JSON.stringify(historyData));
   const tbody = document.getElementById('history-body');

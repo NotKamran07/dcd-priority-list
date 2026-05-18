@@ -727,13 +727,14 @@ function getEffectiveRow(row) {
 }
 
 function updateDoneCount() {
-  const count = Object.values(ticks).reduce((sum, v) => sum + (typeof v === 'object' ? (v.count || 0) : (v ? 1 : 0)), 0);
-  document.getElementById('stat-done').textContent = count;
-  // Update tab counts
-  const donePartsCount = outputRows.filter(r => getTickCount(r['Part ID']) > 0).length;
-  const mainCount = outputRows.length - donePartsCount;
+  // Total individual ticks across all parts
+  const totalTicks = Object.values(ticks).reduce((sum, v) => sum + (typeof v === 'object' ? (v.count || 0) : (v ? 1 : 0)), 0);
+  // Total BERs
+  const totalBers = Object.values(bers).reduce((sum, v) => sum + (typeof v === 'object' ? (v.count || 0) : 0), 0);
+  document.getElementById('stat-done').textContent = totalTicks + totalBers;
   document.getElementById('tab-count-main').textContent = outputRows.length;
-  document.getElementById('tab-count-done').textContent = donePartsCount;
+  // Tab badge shows total ticks + BERs (not unique parts)
+  document.getElementById('tab-count-done').textContent = totalTicks + totalBers;
   // Refresh completed tab if active
   if (currentTab === 'done') renderCompleted();
 }
@@ -1292,8 +1293,7 @@ function saveToHistory() {
       if (!existing) {
         return { partId: row ? row['Part ID'] : key, count, cls, val, earned: (val * count) + berEarned, berCount, berEarned, type: 'tick' };
       }
-      // If current firebase count > our local count, don't overwrite (someone decremented via history tab)
-      if (existing.count > count) return existing;
+      // Always sync to current tick count (handles both increases and decreases)
       existing.count = count;
       existing.berCount = berCount;
       existing.berEarned = berEarned;
@@ -1317,7 +1317,6 @@ function saveToHistory() {
       if (!existing) {
         return { partId: row ? row['Part ID'] : key, count: 0, cls, val: 0, earned: berCount * 0.10, berCount, berEarned: berCount * 0.10, type: 'ber' };
       }
-      if (existing.berCount > berCount) return existing;
       existing.berCount = berCount;
       existing.berEarned = berCount * 0.10;
       existing.earned = (existing.val || 0) * (existing.count || 0) + existing.berEarned;

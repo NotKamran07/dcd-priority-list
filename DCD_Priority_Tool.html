@@ -880,48 +880,24 @@ function confirmAddPart(type) {
   const cls = (window.gradeMap || {})[selectedPartId] || '';
   const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
   const key = safeKey(selectedPartId);
-  const dayRef = HISTORY_REF.child(TODAY);
+
+  // Ensure part is in outputRows so saveToHistory can pick it up
+  if (!outputRows.find(r => r['Part ID'] === selectedPartId)) {
+    outputRows.push({
+      Priority: 2, 'Part ID': selectedPartId, 'Repair Team': 'Manual',
+      'Rep Req': 0, 'Open Orders': '', 'Total Qty': 0,
+      'Part Class': cls, Value: val, _manual: true
+    });
+  }
 
   if (type === 'tick') {
-    // Add to today's ticks in Firebase
+    // Only write to TICKS_REF — saveToHistory will handle history automatically
     const currentTick = getTickCount(selectedPartId);
     TICKS_REF.child(key).set({ count: currentTick + 1 });
-    // Also ensure it's in outputRows for saveToHistory to pick up
-    if (!outputRows.find(r => r['Part ID'] === selectedPartId)) {
-      outputRows.push({
-        Priority: 2, 'Part ID': selectedPartId, 'Repair Team': 'Manual',
-        'Rep Req': 0, 'Open Orders': '', 'Total Qty': 0,
-        'Part Class': cls, Value: val, _manual: true
-      });
-    }
-    // Save directly to history too
-    const histKey = key;
-    dayRef.child(histKey).transaction(entry => {
-      if (!entry) return { partId: selectedPartId, count: 1, cls, val, earned: val, berCount: 0, berEarned: 0, type: 'tick' };
-      entry.count = (entry.count || 0) + 1;
-      entry.earned = (val * entry.count) + (entry.berEarned || 0);
-      return entry;
-    });
   } else if (type === 'ber') {
-    // Add to today's BERs in Firebase
+    // Only write to BER_REF — saveToHistory will handle history automatically
     const currentBer = getBerCount(selectedPartId);
     BER_REF.child(key).set({ count: currentBer + 1 });
-    if (!outputRows.find(r => r['Part ID'] === selectedPartId)) {
-      outputRows.push({
-        Priority: 2, 'Part ID': selectedPartId, 'Repair Team': 'Manual',
-        'Rep Req': 0, 'Open Orders': '', 'Total Qty': 0,
-        'Part Class': cls, Value: val, _manual: true
-      });
-    }
-    // Save directly to history
-    const histKey = `ber_${key}`;
-    dayRef.child(histKey).transaction(entry => {
-      if (!entry) return { partId: selectedPartId, count: 0, cls, val: 0, earned: 0.10, berCount: 1, berEarned: 0.10, type: 'ber' };
-      entry.berCount = (entry.berCount || 0) + 1;
-      entry.berEarned = entry.berCount * 0.10;
-      entry.earned = (val * (entry.count || 0)) + entry.berEarned;
-      return entry;
-    });
   }
 
   closeModal();

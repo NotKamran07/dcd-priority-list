@@ -798,9 +798,19 @@ async function loadCSV(filename) {
 
 async function loadGradingsCSV(filename) {
   const buf = await fetchFile(filename);
-  const text = new TextDecoder('utf-8').decode(buf);
-  // Read as a single flat CSV — no section splitting
-  const wb = XLSX.read(text, { type: 'string' });
+  // Detect if it's a real Excel binary or a plain CSV
+  const header = new Uint8Array(buf.slice(0, 4));
+  const isExcel = (header[0] === 0x50 && header[1] === 0x4B) || // ZIP/xlsx magic bytes
+                  (header[0] === 0xD0 && header[1] === 0xCF);   // OLE2/xls magic bytes
+  let wb;
+  if (isExcel) {
+    // Parse as binary Excel
+    wb = XLSX.read(buf, { type: 'array' });
+  } else {
+    // Parse as plain text CSV
+    const text = new TextDecoder('utf-8').decode(buf);
+    wb = XLSX.read(text, { type: 'string' });
+  }
   const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' });
   return rows;
 }

@@ -1041,12 +1041,15 @@ async function loadAll() {
     });
 
     const boMap = {};
+    const boZeroQtyParts = new Set(); // parts with qty=0 in backorder report
     boRows.forEach(r => {
       const id = (r['Part ID'] || '').toString().trim();
       if (!id || !DCD_PARTS.has(id)) return;
       if (!boMap[id]) boMap[id] = { count: 0, totalQty: 0 };
       boMap[id].count++;
-      boMap[id].totalQty += Number(r['Qty']) || 0;
+      const qty = Number(r['Qty']) || 0;
+      boMap[id].totalQty += qty;
+      if (qty === 0) boZeroQtyParts.add(id); // flag parts with 0 qty
     });
 
     const boIds = new Set(Object.keys(boMap));
@@ -1055,8 +1058,14 @@ async function loadAll() {
     Object.keys(boMap).forEach(id => {
       const bo = boMap[id], pbi = pbiMap[id] || { repReq: 0, totalBad: 0, team: '' };
       const cls = gradeMap[id] || '';
-      // Use PowerBI Total Bad for quantity — more accurate than summing backorder rows
-      const totalQty = pbi.totalBad > 0 ? pbi.totalBad : bo.totalQty;
+      // If backorder report explicitly shows qty=0, force 0 regardless of PowerBI
+      // Otherwise use PowerBI Total Bad as it's more accurate
+      let totalQty;
+      if (boZeroQtyParts.has(id)) {
+        totalQty = 0; // backorder says 0 — trust the backorder report
+      } else {
+        totalQty = pbi.totalBad > 0 ? pbi.totalBad : bo.totalQty;
+      }
       rank1.push({ Priority: 1, 'Part ID': id, 'Repair Team': pbi.team, 'Rep Req': pbi.repReq, 'Open Orders': bo.count, 'Total Qty': totalQty, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
     });
     rank1.sort((a, b) => b['Open Orders'] - a['Open Orders']);

@@ -495,7 +495,15 @@
     <div class="stat"><span class="stat-label">All-Time Parts</span><span class="stat-value" id="hist-total-parts" style="color:#a855f7;">0</span></div>
     <div class="stat"><span class="stat-label">All-Time Repairs</span><span class="stat-value" id="hist-total-repairs" style="color:var(--text);">0</span></div>
     <div class="stat"><span class="stat-label">All-Time Earned</span><span class="stat-value" id="hist-total-earned" style="color:var(--green);">£0.00</span></div>
-    <div class="stat"><span class="stat-label">Days Worked</span><span class="stat-value" id="hist-days-worked" style="color:var(--accent2);">0</span></div>
+    <div class="stat">
+      <span class="stat-label">Days Worked</span>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+        <button onclick="adjustDaysWorked(-0.5)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;width:24px;height:24px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;">−</button>
+        <span class="stat-value" id="hist-days-worked" style="color:var(--accent2);">0</span>
+        <button onclick="adjustDaysWorked(0.5)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;width:24px;height:24px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;">+</button>
+      </div>
+      <span style="font-size:0.58rem;color:var(--muted);">± 0.5 day increments</span>
+    </div>
     <div class="stat"><span class="stat-label">Avg Repairs / Day</span><span class="stat-value" id="hist-avg-repairs" style="color:var(--text);">0</span></div>
     <button onclick="openModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.45rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);">+ Add Part</button>
     <button onclick="recalculateHistory()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent2);border:1px solid var(--accent2);">↻ Recalculate Values</button>
@@ -1628,7 +1636,9 @@ function renderHistory() {
 
   const allEntries = [];
   Object.keys(historyData).sort().reverse().forEach(date => {
+    if (date === '_meta') return; // skip metadata node
     const day = historyData[date];
+    if (!day) return;
     Object.keys(day).forEach(key => {
       allEntries.push({ date, ...day[key], isBerOnly: day[key].type === 'ber', _key: key });
     });
@@ -1685,6 +1695,7 @@ function renderHistory() {
   // Only count days where at least one entry has actual work (repairs or BERs > 0)
   const daysWithWork = new Set();
   Object.keys(historyData).forEach(date => {
+    if (date === '_meta') return; // skip metadata
     const day = historyData[date];
     if (!day) return;
     const hasWork = Object.values(day).some(entry =>
@@ -1692,13 +1703,39 @@ function renderHistory() {
     );
     if (hasWork) daysWithWork.add(date);
   });
-  const uniqueDays = daysWithWork.size;
-  const avgRepairs = uniqueDays > 0 ? (totalRepairs / uniqueDays).toFixed(1) : '0';
+  baseDaysWorked = daysWithWork.size;
+  // Load saved adjustment from Firebase metadata
+  const savedAdj = historyData['_meta'] ? (historyData['_meta'].daysAdjustment || 0) : 0;
+  daysAdjustment = savedAdj;
+  const adjustedDays = Math.max(baseDaysWorked > 0 ? 0.5 : 0, baseDaysWorked + daysAdjustment);
+  const avgRepairs = adjustedDays > 0 ? (totalRepairs / adjustedDays).toFixed(1) : '0';
   document.getElementById('hist-total-parts').textContent = allEntries.length;
   document.getElementById('hist-total-repairs').textContent = totalRepairs;
   document.getElementById('hist-total-earned').textContent = `£${totalEarned.toFixed(2)}`;
-  document.getElementById('hist-days-worked').textContent = uniqueDays;
+  document.getElementById('hist-days-worked').textContent = adjustedDays % 1 === 0 ? adjustedDays : adjustedDays.toFixed(1);
   document.getElementById('hist-avg-repairs').textContent = avgRepairs;
+}
+
+// Days worked manual adjustment (persisted in Firebase)
+let daysAdjustment = 0;
+let baseDaysWorked = 0;
+
+function adjustDaysWorked(delta) {
+  const newAdj = daysAdjustment + delta;
+  // Don't let adjusted days go below 0.5 or be unreasonably high
+  const minDays = baseDaysWorked > 0 ? 0.5 : 0;
+  daysAdjustment = Math.max(-(baseDaysWorked - minDays), newAdj);
+  const adjustedDays = Math.max(0.5, baseDaysWorked + daysAdjustment);
+  // Save adjustment to Firebase so it persists
+  if (HISTORY_REF) HISTORY_REF.child('_meta/daysAdjustment').set(daysAdjustment);
+  updateDaysDisplay(adjustedDays);
+}
+
+function updateDaysDisplay(adjustedDays) {
+  const totalRepairs = parseInt(document.getElementById('hist-total-repairs').textContent) || 0;
+  document.getElementById('hist-days-worked').textContent = adjustedDays % 1 === 0 ? adjustedDays : adjustedDays.toFixed(1);
+  const avg = adjustedDays > 0 ? (totalRepairs / adjustedDays).toFixed(1) : '0';
+  document.getElementById('hist-avg-repairs').textContent = avg;
 }
 
 function recalculateHistory() {

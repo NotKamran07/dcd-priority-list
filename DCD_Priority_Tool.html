@@ -1712,7 +1712,15 @@ function renderHistory() {
   document.getElementById('hist-total-parts').textContent = allEntries.length;
   document.getElementById('hist-total-repairs').textContent = totalRepairs;
   document.getElementById('hist-total-earned').textContent = `£${totalEarned.toFixed(2)}`;
-  document.getElementById('hist-days-worked').textContent = adjustedDays % 1 === 0 ? adjustedDays : adjustedDays.toFixed(1);
+  // Show diff indicator if days have been adjusted
+  const adjStr = adjustedDays % 1 === 0 ? adjustedDays : adjustedDays.toFixed(1);
+  let diffStr = '';
+  if (daysAdjustment !== 0) {
+    const sign = daysAdjustment > 0 ? '+' : '';
+    const diffVal = daysAdjustment % 1 === 0 ? daysAdjustment : daysAdjustment.toFixed(1);
+    diffStr = ` <span style="font-size:0.7rem;color:${daysAdjustment > 0 ? 'var(--accent)' : 'var(--green)'};">(${sign}${diffVal})</span>`;
+  }
+  document.getElementById('hist-days-worked').innerHTML = adjStr + diffStr;
   document.getElementById('hist-avg-repairs').textContent = avgRepairs;
 }
 
@@ -1733,7 +1741,15 @@ function adjustDaysWorked(delta) {
 
 function updateDaysDisplay(adjustedDays) {
   const totalRepairs = parseInt(document.getElementById('hist-total-repairs').textContent) || 0;
-  document.getElementById('hist-days-worked').textContent = adjustedDays % 1 === 0 ? adjustedDays : adjustedDays.toFixed(1);
+  const baseStr = baseDaysWorked % 1 === 0 ? baseDaysWorked : baseDaysWorked.toFixed(1);
+  const adjStr = adjustedDays % 1 === 0 ? adjustedDays : adjustedDays.toFixed(1);
+  let diffStr = '';
+  if (daysAdjustment !== 0) {
+    const sign = daysAdjustment > 0 ? '+' : '';
+    const diffVal = daysAdjustment % 1 === 0 ? daysAdjustment : daysAdjustment.toFixed(1);
+    diffStr = ` <span style="font-size:0.7rem;color:${daysAdjustment > 0 ? 'var(--accent)' : 'var(--green)'};">(${sign}${diffVal})</span>`;
+  }
+  document.getElementById('hist-days-worked').innerHTML = adjStr + diffStr;
   const avg = adjustedDays > 0 ? (totalRepairs / adjustedDays).toFixed(1) : '0';
   document.getElementById('hist-avg-repairs').textContent = avg;
 }

@@ -1809,6 +1809,7 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
   tracker.style.display = 'block';
 
   const currentAvg = totalRepairs / adjustedDays;
+  console.log('[tracker] totalRepairs:', totalRepairs, 'adjustedDays:', adjustedDays, 'avg:', currentAvg.toFixed(2));
   const targets = [
     { id: '18', target: 18, bonus: 25 },
     { id: '21', target: 21, bonus: 50 },
@@ -1831,8 +1832,9 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
     const pctEl = document.getElementById('pct-' + t.id);
     const statusEl = document.getElementById('status-' + t.id);
 
-    bar.style.width = pct.toFixed(1) + '%';
-    pctEl.textContent = pct.toFixed(0) + '%';
+    console.log('[tracker] bar-' + t.id + ' width:', pct.toFixed(1) + '%', 'bar element:', !!bar);
+    if (bar) bar.style.width = pct.toFixed(1) + '%';
+    if (pctEl) pctEl.textContent = pct.toFixed(0) + '%';
 
     if (currentAvg >= t.target) {
       statusEl.textContent = isPastMonth ? '✓ Achieved' : '✓ On track';

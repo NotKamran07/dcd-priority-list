@@ -1107,6 +1107,7 @@ function startFirebaseListeners() {
 
   BER_REF.on('value', snap => {
     bers = snap.val() || {};
+    updateDoneCount();
     if (currentTab === 'main') renderTable();
     else if (currentTab === 'done') renderCompleted();
     else if (currentTab === 'history') renderHistory();
@@ -1375,11 +1376,17 @@ function printList(dept) {
 let historyData = {};
 
 function updateHistoryCount() {
-  let total = 0;
-  Object.values(historyData).forEach(day => {
-    Object.values(day).forEach(entry => { total += entry.count || 0; });
+  // Only count repairs for the current month
+  const currentMonth = TODAY.slice(0, 7); // YYYY-MM
+  let monthTotal = 0;
+  Object.keys(historyData).forEach(date => {
+    if (date === '_meta') return;
+    if (!date.startsWith(currentMonth)) return;
+    const day = historyData[date];
+    if (!day) return;
+    Object.values(day).forEach(entry => { monthTotal += entry.count || 0; });
   });
-  document.getElementById('tab-count-history').textContent = total;
+  document.getElementById('tab-count-history').textContent = monthTotal;
 }
 
 function saveToHistory() {

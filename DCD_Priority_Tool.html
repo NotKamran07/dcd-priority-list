@@ -1790,22 +1790,21 @@ function setMonthFilter(month, btn) {
 
 function buildMonthButtons() {
   const bar = document.getElementById('month-filter-bar');
-  // Get unique months from historyData
   const months = new Set();
   Object.keys(historyData).forEach(date => {
     if (date === '_meta') return;
-    months.add(date.slice(0, 7)); // YYYY-MM
+    months.add(date.slice(0, 7));
   });
-
-  // Rebuild buttons
-  bar.innerHTML = '<button class="month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '') + '" onclick="setMonthFilter('all', this)">All Time</button>';
+  let btns = '<button class="month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '') + '" onclick="setMonthFilter(\'all\', this)">All Time</button>';
   [...months].sort().reverse().forEach(m => {
     const d = new Date(m + '-01');
     const label = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
     const isActive = activeMonthFilter === m;
-    bar.innerHTML += '<button class="month-btn' + (isActive ? ' active' : '') + '" onclick="setMonthFilter('' + m + '', this)">' + label + '</button>';
+    btns += '<button class="month-btn' + (isActive ? ' active' : '') + '" onclick="setMonthFilter(\'' + m + '\', this)">' + label + '</button>';
   });
+  bar.innerHTML = btns;
 }
+
 
 function calcCommission(avgPerDay) {
   if (avgPerDay >= 24) return { label: '24/day ✓', amount: 75, color: '#2ecc71' };

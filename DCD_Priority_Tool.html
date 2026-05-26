@@ -81,6 +81,45 @@
   .tab-btn.active .tab-count { background: var(--accent); color: white; }
   .tab-btn.tab-done.active { border-bottom-color: var(--green); }
   .tab-btn.tab-history.active { border-bottom-color: #a855f7; }
+  /* Target tracker */
+  .target-tracker { margin-bottom: 1.5rem; }
+  .target-tracker-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.75rem; }
+  .target-bars { display: flex; flex-direction: column; gap: 0.6rem; }
+  .target-bar-wrap { display: flex; align-items: center; gap: 0.75rem; }
+  .target-bar-label { font-size: 0.68rem; color: var(--muted); width: 120px; flex-shrink: 0; }
+  .target-bar-label span { font-weight: 700; color: var(--text); }
+  .target-bar-track { flex: 1; height: 10px; background: var(--surface2); border-radius: 5px; overflow: hidden; position: relative; }
+  .target-bar-fill { height: 100%; border-radius: 5px; transition: width 0.4s ease; }
+  .target-bar-pct { font-size: 0.65rem; color: var(--muted); width: 40px; text-align: right; flex-shrink: 0; }
+  .target-bonus { font-size: 0.65rem; font-family: 'Syne', sans-serif; font-weight: 700; width: 50px; text-align: right; flex-shrink: 0; }
+  .target-status { font-size: 0.65rem; width: 80px; text-align: right; flex-shrink: 0; }
+
+  /* Month filter */
+  .month-filter-bar { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:1.2rem; align-items:center; }
+  .month-btn {
+    font-family:'Syne',sans-serif; font-weight:700; font-size:0.65rem; letter-spacing:0.05em;
+    text-transform:uppercase; padding:4px 10px; cursor:pointer; border-radius:3px;
+    border:1px solid var(--border); background:var(--surface2); color:var(--muted);
+    transition:all 0.15s;
+  }
+  .month-btn:hover { color:var(--text); border-color:var(--muted); }
+  .month-btn.active { background:var(--accent2); color:white; border-color:var(--accent2); }
+  .month-btn.all-btn.active { background:var(--surface2); color:var(--text); border-color:var(--text); }
+
+  /* Month summary card */
+  #month-summary-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:6px;
+    padding:1rem 1.2rem; margin-bottom:1.2rem; display:none;
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:1rem;
+  }
+  .month-stat { display:flex; flex-direction:column; gap:2px; }
+  .month-stat-label { font-size:0.6rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.07em; }
+  .month-stat-value { font-family:'Syne',sans-serif; font-weight:700; font-size:1rem; }
+  .commission-badge {
+    display:inline-block; font-family:'Syne',sans-serif; font-weight:700; font-size:0.7rem;
+    padding:3px 10px; border-radius:3px; color:white; margin-top:2px;
+  }
+
   .hist-sub-btn {
     font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.72rem;
     text-transform: uppercase; letter-spacing: 0.05em; padding: 0.6rem 1.2rem;
@@ -388,6 +427,7 @@
   <div class="stat"><span class="stat-label">Rank 2 — PowerBI</span><span class="stat-value r2" id="stat-r2">—</span></div>
   <div class="stat"><span class="stat-label">Total Parts</span><span class="stat-value" id="stat-total">—</span></div>
   <div class="stat"><span class="stat-label">Completed Today</span><span class="stat-value done" id="stat-done">0</span></div>
+  <div class="stat"><span class="stat-label">BER Today</span><span class="stat-value" id="stat-ber-today" style="color:#c00000;">0</span></div>
 </div>
 
 <div id="tab-bar">
@@ -509,6 +549,72 @@
     <button onclick="recalculateHistory()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent2);border:1px solid var(--accent2);">↻ Recalculate Values</button>
     <button onclick="clearHistory()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.45rem 1rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Clear History</button>
   </div>
+  <!-- Month Filter -->
+  <div class="month-filter-bar" id="month-filter-bar">
+    <button class="month-btn all-btn active" onclick="setMonthFilter('all', this)">All Time</button>
+  </div>
+
+  <!-- Month Summary Card -->
+  <div id="month-summary-card" style="display:none;">
+    <div class="month-stat">
+      <span class="month-stat-label">Month</span>
+      <span class="month-stat-value" id="ms-month" style="color:var(--accent2);">—</span>
+    </div>
+    <div class="month-stat">
+      <span class="month-stat-label">Total Repairs</span>
+      <span class="month-stat-value" id="ms-repairs">0</span>
+    </div>
+    <div class="month-stat">
+      <span class="month-stat-label">Days Worked</span>
+      <span class="month-stat-value" id="ms-days">0</span>
+    </div>
+    <div class="month-stat">
+      <span class="month-stat-label">Avg / Day</span>
+      <span class="month-stat-value" id="ms-avg">0</span>
+    </div>
+    <div class="month-stat">
+      <span class="month-stat-label">Earned</span>
+      <span class="month-stat-value" id="ms-earned" style="color:var(--green);">£0.00</span>
+    </div>
+    <div class="month-stat">
+      <span class="month-stat-label">Commission</span>
+      <div>
+        <span class="commission-badge" id="ms-commission-badge" style="background:var(--border);">None</span>
+        <div class="month-stat-value" id="ms-commission" style="color:var(--green);">£0</div>
+      </div>
+    </div>
+    <div class="month-stat">
+      <span class="month-stat-label">Total Income</span>
+      <span class="month-stat-value" id="ms-total" style="color:var(--green);font-size:1.2rem;">£0.00</span>
+    </div>
+  </div>
+
+  <!-- Target Tracker -->
+  <div class="target-tracker" id="target-tracker" style="display:none;">
+    <div class="target-tracker-title">📈 Monthly Avg Repair Target Tracker</div>
+    <div class="target-bars">
+      <div class="target-bar-wrap">
+        <div class="target-bar-label">18/day → <span style="color:#f0c040;">+£25</span></div>
+        <div class="target-bar-track"><div class="target-bar-fill" id="bar-18" style="background:#f0c040;width:0%;"></div></div>
+        <div class="target-bar-pct" id="pct-18">0%</div>
+        <div class="target-status" id="status-18" style="color:var(--muted);">—</div>
+      </div>
+      <div class="target-bar-wrap">
+        <div class="target-bar-label">21/day → <span style="color:#f0a040;">+£50</span></div>
+        <div class="target-bar-track"><div class="target-bar-fill" id="bar-21" style="background:#f0a040;width:0%;"></div></div>
+        <div class="target-bar-pct" id="pct-21">0%</div>
+        <div class="target-status" id="status-21" style="color:var(--muted);">—</div>
+      </div>
+      <div class="target-bar-wrap">
+        <div class="target-bar-label">24/day → <span style="color:var(--green);">+£75</span></div>
+        <div class="target-bar-track"><div class="target-bar-fill" id="bar-24" style="background:var(--green);width:0%;"></div></div>
+        <div class="target-bar-pct" id="pct-24">0%</div>
+        <div class="target-status" id="status-24" style="color:var(--muted);">—</div>
+      </div>
+    </div>
+    <div id="target-projection" style="margin-top:0.75rem;font-size:0.68rem;color:var(--muted);line-height:1.8;"></div>
+  </div>
+
   <table style="width:100%;border-collapse:collapse;font-size:0.72rem;">
     <thead>
       <tr style="background:var(--surface2);border-bottom:2px solid var(--border);">
@@ -737,11 +843,12 @@ function getEffectiveRow(row) {
 function updateDoneCount() {
   // Total individual ticks across all parts
   const totalTicks = Object.values(ticks).reduce((sum, v) => sum + (typeof v === 'object' ? (v.count || 0) : (v ? 1 : 0)), 0);
-  // Total BERs
+  // Total BERs — only current user's BERs
   const totalBers = Object.values(bers).reduce((sum, v) => sum + (typeof v === 'object' ? (v.count || 0) : 0), 0);
-  document.getElementById('stat-done').textContent = totalTicks + totalBers;
+  document.getElementById('stat-done').textContent = totalTicks;
+  document.getElementById('stat-ber-today').textContent = totalBers;
   document.getElementById('tab-count-main').textContent = outputRows.length;
-  // Tab badge shows total ticks + BERs (not unique parts)
+  // Tab badge shows total ticks only
   document.getElementById('tab-count-done').textContent = totalTicks + totalBers;
   // Refresh completed tab if active
   if (currentTab === 'done') renderCompleted();
@@ -1612,6 +1719,126 @@ function addBerToHistory(date, key) {
 }
 
 
+function updateTargetTracker(totalRepairs, adjustedDays) {
+  const tracker = document.getElementById('target-tracker');
+  if (adjustedDays <= 0 || totalRepairs <= 0) { tracker.style.display = 'none'; return; }
+  tracker.style.display = 'block';
+
+  const currentAvg = totalRepairs / adjustedDays;
+  const targets = [
+    { id: '18', target: 18, bonus: 25 },
+    { id: '21', target: 21, bonus: 50 },
+    { id: '24', target: 24, bonus: 75 }
+  ];
+
+  // Work out remaining working days this month (rough estimate: ~22 working days/month)
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const workingDaysInMonth = Math.round(daysInMonth * 22 / 30); // ~22 working days
+  const remainingDays = Math.max(0, workingDaysInMonth - adjustedDays);
+
+  targets.forEach(t => {
+    const pct = Math.min(100, (currentAvg / t.target) * 100);
+    const bar = document.getElementById('bar-' + t.id);
+    const pctEl = document.getElementById('pct-' + t.id);
+    const statusEl = document.getElementById('status-' + t.id);
+
+    bar.style.width = pct.toFixed(1) + '%';
+    pctEl.textContent = pct.toFixed(0) + '%';
+
+    if (currentAvg >= t.target) {
+      statusEl.textContent = '✓ On track';
+      statusEl.style.color = 'var(--green)';
+      bar.style.opacity = '1';
+    } else {
+      // How many extra repairs needed total to hit target by end of month
+      const totalNeeded = t.target * workingDaysInMonth;
+      const extraNeeded = Math.max(0, totalNeeded - totalRepairs);
+      const extraPerDay = remainingDays > 0 ? (extraNeeded / remainingDays).toFixed(1) : '∞';
+      statusEl.textContent = '+' + extraPerDay + '/day';
+      statusEl.style.color = 'var(--accent)';
+      bar.style.opacity = '0.85';
+    }
+  });
+
+  // Projection message
+  const projEl = document.getElementById('target-projection');
+  const projectedTotal = currentAvg * workingDaysInMonth;
+  let msg = `Current avg: <strong style="color:var(--text);">${currentAvg.toFixed(1)}/day</strong> over ${adjustedDays} day${adjustedDays !== 1 ? 's' : ''}.`;
+
+  if (currentAvg >= 24) {
+    msg += ` 🎉 On course for <strong style="color:var(--green);">£75 bonus</strong> (24/day target met!)`;
+  } else if (currentAvg >= 21) {
+    msg += ` 🟠 On course for <strong style="color:#f0a040;">£50 bonus</strong> (21/day target met). Keep going for £75!`;
+  } else if (currentAvg >= 18) {
+    msg += ` 🟡 On course for <strong style="color:#f0c040;">£25 bonus</strong> (18/day target met). Keep going for £50!`;
+  } else {
+    msg += ` Need <strong style="color:var(--accent);">${(18 - currentAvg).toFixed(1)} more repairs/day</strong> to reach the £25 bonus.`;
+  }
+  projEl.innerHTML = msg;
+}
+
+// Month filter state
+let activeMonthFilter = 'all';
+
+function setMonthFilter(month, btn) {
+  activeMonthFilter = month;
+  document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderHistory();
+}
+
+function buildMonthButtons() {
+  const bar = document.getElementById('month-filter-bar');
+  // Get unique months from historyData
+  const months = new Set();
+  Object.keys(historyData).forEach(date => {
+    if (date === '_meta') return;
+    months.add(date.slice(0, 7)); // YYYY-MM
+  });
+
+  // Rebuild buttons
+  bar.innerHTML = '<button class="month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '') + '" onclick="setMonthFilter('all', this)">All Time</button>';
+  [...months].sort().reverse().forEach(m => {
+    const d = new Date(m + '-01');
+    const label = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+    const isActive = activeMonthFilter === m;
+    bar.innerHTML += '<button class="month-btn' + (isActive ? ' active' : '') + '" onclick="setMonthFilter('' + m + '', this)">' + label + '</button>';
+  });
+}
+
+function calcCommission(avgPerDay) {
+  if (avgPerDay >= 24) return { label: '24/day ✓', amount: 75, color: '#2ecc71' };
+  if (avgPerDay >= 21) return { label: '21/day ✓', amount: 50, color: '#f0a040' };
+  if (avgPerDay >= 18) return { label: '18/day ✓', amount: 25, color: '#f0c040' };
+  return { label: 'Not reached', amount: 0, color: 'var(--border)' };
+}
+
+function updateMonthSummary(filteredEntries, monthKey) {
+  const card = document.getElementById('month-summary-card');
+  if (monthKey === 'all' || filteredEntries.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'grid';
+
+  const repairs = filteredEntries.reduce((s, e) => s + (e.count || 0), 0);
+  const earned = filteredEntries.reduce((s, e) => s + (e.earned || 0), 0);
+  const workDays = new Set(filteredEntries.filter(e => (e.count||0)>0||(e.berCount||0)>0).map(e=>e.date)).size;
+  const avg = workDays > 0 ? repairs / workDays : 0;
+  const commission = calcCommission(avg);
+  const d = new Date(monthKey + '-01');
+  const monthLabel = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+
+  document.getElementById('ms-month').textContent = monthLabel;
+  document.getElementById('ms-repairs').textContent = repairs;
+  document.getElementById('ms-days').textContent = workDays;
+  document.getElementById('ms-avg').textContent = avg.toFixed(1);
+  document.getElementById('ms-earned').textContent = '£' + earned.toFixed(2);
+  document.getElementById('ms-commission-badge').textContent = commission.label;
+  document.getElementById('ms-commission-badge').style.background = commission.color;
+  document.getElementById('ms-commission').textContent = commission.amount > 0 ? '+£' + commission.amount : '£0';
+  document.getElementById('ms-commission').style.color = commission.amount > 0 ? 'var(--green)' : 'var(--muted)';
+  document.getElementById('ms-total').textContent = '£' + (earned + commission.amount).toFixed(2);
+}
+
 function formatHistoryDate(dateStr) {
   if (!dateStr) return dateStr;
   const d = new Date(dateStr + 'T12:00:00');
@@ -1636,13 +1863,18 @@ function renderHistory() {
 
   const allEntries = [];
   Object.keys(historyData).sort().reverse().forEach(date => {
-    if (date === '_meta') return; // skip metadata node
+    if (date === '_meta') return;
+    if (activeMonthFilter !== 'all' && !date.startsWith(activeMonthFilter)) return;
     const day = historyData[date];
     if (!day) return;
     Object.keys(day).forEach(key => {
       allEntries.push({ date, ...day[key], isBerOnly: day[key].type === 'ber', _key: key });
     });
   });
+
+  // Build month filter buttons and update month summary
+  buildMonthButtons();
+  updateMonthSummary(allEntries, activeMonthFilter);
 
   if (allEntries.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" class="empty-done">No history yet — complete some parts to start tracking</td></tr>`;
@@ -1722,6 +1954,7 @@ function renderHistory() {
   }
   document.getElementById('hist-days-worked').innerHTML = adjStr + diffStr;
   document.getElementById('hist-avg-repairs').textContent = avgRepairs;
+  updateTargetTracker(totalRepairs, adjustedDays);
 }
 
 // Days worked manual adjustment (persisted in Firebase)
@@ -1752,6 +1985,7 @@ function updateDaysDisplay(adjustedDays) {
   document.getElementById('hist-days-worked').innerHTML = adjStr + diffStr;
   const avg = adjustedDays > 0 ? (totalRepairs / adjustedDays).toFixed(1) : '0';
   document.getElementById('hist-avg-repairs').textContent = avg;
+  updateTargetTracker(totalRepairs, adjustedDays);
 }
 
 function recalculateHistory() {

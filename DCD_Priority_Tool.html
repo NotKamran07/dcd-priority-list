@@ -1837,6 +1837,80 @@ function getDateRowStyle(dateStr) {
   return 'color: var(--muted);';
 }
 
+
+
+function buildMonthButtons() {
+  const wrap = document.getElementById('month-filter-buttons');
+  if (!wrap || typeof historyData === 'undefined') return;
+
+  const months = [...new Set(
+    Object.keys(historyData)
+      .filter(k => k !== '_meta' && /^\d{4}-\d{2}-\d{2}$/.test(k))
+      .map(k => k.slice(0, 7))
+  )].sort().reverse();
+
+  wrap.innerHTML = '';
+
+  const allBtn = document.createElement('button');
+  allBtn.className = 'month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '');
+  allBtn.textContent = 'ALL';
+  allBtn.onclick = () => {
+    activeMonthFilter = 'all';
+    renderHistory();
+  };
+  wrap.appendChild(allBtn);
+
+  months.forEach(month => {
+    const btn = document.createElement('button');
+    btn.className = 'month-btn' + (activeMonthFilter === month ? ' active' : '');
+    btn.textContent = month;
+    btn.onclick = () => {
+      activeMonthFilter = month;
+      renderHistory();
+    };
+    wrap.appendChild(btn);
+  });
+}
+
+function updateMonthSummary(entries, activeMonth) {
+  const card = document.getElementById('month-summary-card');
+  if (!card) return;
+
+  if (!entries || entries.length === 0) {
+    card.style.display = 'none';
+    return;
+  }
+
+  card.style.display = 'grid';
+
+  const total = entries.length;
+  const completed = entries.filter(e => e.type !== 'ber').length;
+  const berCount = entries.filter(e => e.type === 'ber').length;
+
+  card.innerHTML = `
+    <div class="month-stat">
+      <div class="month-stat-label">Filter</div>
+      <div class="month-stat-value">${activeMonth === 'all' ? 'All Time' : activeMonth}</div>
+    </div>
+
+    <div class="month-stat">
+      <div class="month-stat-label">Completed</div>
+      <div class="month-stat-value">${completed}</div>
+    </div>
+
+    <div class="month-stat">
+      <div class="month-stat-label">BER</div>
+      <div class="month-stat-value">${berCount}</div>
+    </div>
+
+    <div class="month-stat">
+      <div class="month-stat-label">Total Entries</div>
+      <div class="month-stat-value">${total}</div>
+    </div>
+  `;
+}
+
+
 function renderHistory() {
   console.log('[renderHistory] historyData keys:', Object.keys(historyData), 'activeMonthFilter:', activeMonthFilter);
   const tbody = document.getElementById('history-body');

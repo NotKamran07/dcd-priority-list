@@ -1728,7 +1728,12 @@ function addBerToHistory(date, key) {
 
 function updateTargetTracker(totalRepairs, adjustedDays) {
   const tracker = document.getElementById('target-tracker');
-  if (adjustedDays <= 0 || totalRepairs <= 0) { tracker.style.display = 'none'; return; }
+
+  // Hide on All Time view
+  if (activeMonthFilter === 'all' || adjustedDays <= 0 || totalRepairs <= 0) {
+    tracker.style.display = 'none';
+    return;
+  }
   tracker.style.display = 'block';
 
   const currentAvg = totalRepairs / adjustedDays;
@@ -1738,13 +1743,17 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
     { id: '24', target: 24, bonus: 75 }
   ];
 
-  // Work out remaining working days this month (rough estimate: ~22 working days/month)
+  // Check if this is the current month or a past month
+  const currentMonth = TODAY.slice(0, 7);
+  const isPastMonth = activeMonthFilter < currentMonth;
+
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  const workingDaysInMonth = Math.round(daysInMonth * 22 / 30); // ~22 working days
+  const workingDaysInMonth = Math.round(daysInMonth * 22 / 30);
   const remainingDays = Math.max(0, workingDaysInMonth - adjustedDays);
 
   targets.forEach(t => {
+    // Bar fills based on actual avg vs target — capped at 100%
     const pct = Math.min(100, (currentAvg / t.target) * 100);
     const bar = document.getElementById('bar-' + t.id);
     const pctEl = document.getElementById('pct-' + t.id);
@@ -1754,96 +1763,41 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
     pctEl.textContent = pct.toFixed(0) + '%';
 
     if (currentAvg >= t.target) {
-      statusEl.textContent = '✓ On track';
+      statusEl.textContent = isPastMonth ? '✓ Achieved' : '✓ On track';
       statusEl.style.color = 'var(--green)';
-      bar.style.opacity = '1';
+    } else if (isPastMonth) {
+      // Past month — show how far short they were
+      statusEl.textContent = (t.target - currentAvg).toFixed(1) + ' short';
+      statusEl.style.color = 'var(--accent)';
     } else {
-      // How many extra repairs needed total to hit target by end of month
+      // Current month — show extra needed per day
       const totalNeeded = t.target * workingDaysInMonth;
       const extraNeeded = Math.max(0, totalNeeded - totalRepairs);
       const extraPerDay = remainingDays > 0 ? (extraNeeded / remainingDays).toFixed(1) : '∞';
       statusEl.textContent = '+' + extraPerDay + '/day';
       statusEl.style.color = 'var(--accent)';
-      bar.style.opacity = '0.85';
     }
   });
 
-  // Projection message
+  // Projection/summary message
   const projEl = document.getElementById('target-projection');
-  const projectedTotal = currentAvg * workingDaysInMonth;
-  let msg = `Current avg: <strong style="color:var(--text);">${currentAvg.toFixed(1)}/day</strong> over ${adjustedDays} day${adjustedDays !== 1 ? 's' : ''}.`;
+  const commission = calcCommission(currentAvg);
+  let msg = (isPastMonth ? 'Final avg: ' : 'Current avg: ') +
+    '<strong style="color:var(--text);">' + currentAvg.toFixed(1) + '/day</strong> over ' +
+    adjustedDays + ' day' + (adjustedDays !== 1 ? 's' : '') + '. ';
 
-  if (currentAvg >= 24) {
-    msg += ` 🎉 On course for <strong style="color:var(--green);">£75 bonus</strong> (24/day target met!)`;
-  } else if (currentAvg >= 21) {
-    msg += ` 🟠 On course for <strong style="color:#f0a040;">£50 bonus</strong> (21/day target met). Keep going for £75!`;
-  } else if (currentAvg >= 18) {
-    msg += ` 🟡 On course for <strong style="color:#f0c040;">£25 bonus</strong> (18/day target met). Keep going for £50!`;
+  if (commission.amount > 0) {
+    msg += (isPastMonth ? '🎉 Earned ' : '🎉 On course for ') +
+      '<strong style="color:' + commission.color + ';">£' + commission.amount + ' commission</strong> (' + commission.label + ')';
   } else {
-    msg += ` Need <strong style="color:var(--accent);">${(18 - currentAvg).toFixed(1)} more repairs/day</strong> to reach the £25 bonus.`;
+    const needed = (18 - currentAvg).toFixed(1);
+    msg += (isPastMonth ? '❌ Missed £25 bonus by ' : 'Need ') +
+      '<strong style="color:var(--accent);">' + needed + ' more repairs/day</strong>' +
+      (isPastMonth ? '' : ' to reach the £25 bonus.');
   }
   projEl.innerHTML = msg;
 }
 
-// Month filter state
-let activeMonthFilter = 'all';
-
-function setMonthFilter(month, btn) {
-  activeMonthFilter = month;
-  document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
-  btn.classList.add('active');
-  renderHistory();
-}
-
-function buildMonthButtons() {
-  const bar = document.getElementById('month-filter-bar');
-  const months = new Set();
-  Object.keys(historyData).forEach(date => {
-    if (date === '_meta') return;
-    months.add(date.slice(0, 7));
-  });
-  let btns = '<button class="month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '') + '" onclick="setMonthFilter(\'all\', this)">All Time</button>';
-  [...months].sort().reverse().forEach(m => {
-    const d = new Date(m + '-01');
-    const label = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-    const isActive = activeMonthFilter === m;
-    btns += '<button class="month-btn' + (isActive ? ' active' : '') + '" onclick="setMonthFilter(\'' + m + '\', this)">' + label + '</button>';
-  });
-  bar.innerHTML = btns;
-}
-
-
-function calcCommission(avgPerDay) {
-  if (avgPerDay >= 24) return { label: '24/day ✓', amount: 75, color: '#2ecc71' };
-  if (avgPerDay >= 21) return { label: '21/day ✓', amount: 50, color: '#f0a040' };
-  if (avgPerDay >= 18) return { label: '18/day ✓', amount: 25, color: '#f0c040' };
-  return { label: 'Not reached', amount: 0, color: 'var(--border)' };
-}
-
-function updateMonthSummary(filteredEntries, monthKey) {
-  const card = document.getElementById('month-summary-card');
-  if (monthKey === 'all' || filteredEntries.length === 0) { card.style.display = 'none'; return; }
-  card.style.display = 'grid';
-
-  const repairs = filteredEntries.reduce((s, e) => s + (e.count || 0), 0);
-  const earned = filteredEntries.reduce((s, e) => s + (e.earned || 0), 0);
-  const workDays = new Set(filteredEntries.filter(e => (e.count||0)>0||(e.berCount||0)>0).map(e=>e.date)).size;
-  const avg = workDays > 0 ? repairs / workDays : 0;
-  const commission = calcCommission(avg);
-  const d = new Date(monthKey + '-01');
-  const monthLabel = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
-
-  document.getElementById('ms-month').textContent = monthLabel;
-  document.getElementById('ms-repairs').textContent = repairs;
-  document.getElementById('ms-days').textContent = workDays;
-  document.getElementById('ms-avg').textContent = avg.toFixed(1);
-  document.getElementById('ms-earned').textContent = '£' + earned.toFixed(2);
-  document.getElementById('ms-commission-badge').textContent = commission.label;
-  document.getElementById('ms-commission-badge').style.background = commission.color;
-  document.getElementById('ms-commission').textContent = commission.amount > 0 ? '+£' + commission.amount : '£0';
-  document.getElementById('ms-commission').style.color = commission.amount > 0 ? 'var(--green)' : 'var(--muted)';
-  document.getElementById('ms-total').textContent = '£' + (earned + commission.amount).toFixed(2);
-}
 
 function formatHistoryDate(dateStr) {
   if (!dateStr) return dateStr;

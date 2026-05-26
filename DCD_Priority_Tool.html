@@ -1838,6 +1838,7 @@ function getDateRowStyle(dateStr) {
 }
 
 function renderHistory() {
+  console.log('[renderHistory] historyData keys:', Object.keys(historyData), 'activeMonthFilter:', activeMonthFilter);
   const tbody = document.getElementById('history-body');
   tbody.innerHTML = '';
 
@@ -1851,6 +1852,8 @@ function renderHistory() {
       allEntries.push({ date, ...day[key], isBerOnly: day[key].type === 'ber', _key: key });
     });
   });
+
+  console.log('[renderHistory] allEntries count:', allEntries.length);
 
   // Build month filter buttons and update month summary
   buildMonthButtons();

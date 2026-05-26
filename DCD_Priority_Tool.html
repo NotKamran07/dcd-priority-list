@@ -1726,6 +1726,13 @@ function addBerToHistory(date, key) {
 }
 
 
+function calcCommission(avgPerDay) {
+  if (avgPerDay >= 24) return { label: '24/day ✓', amount: 75, color: '#2ecc71' };
+  if (avgPerDay >= 21) return { label: '21/day ✓', amount: 50, color: '#f0a040' };
+  if (avgPerDay >= 18) return { label: '18/day ✓', amount: 25, color: '#f0c040' };
+  return { label: 'Not reached', amount: 0, color: 'var(--border)' };
+}
+
 function updateTargetTracker(totalRepairs, adjustedDays) {
   const tracker = document.getElementById('target-tracker');
 

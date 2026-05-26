@@ -1205,6 +1205,7 @@ async function loadAll() {
     document.getElementById('tab-bar').style.display = 'flex';
     document.getElementById('actions-bar').style.display = 'flex';
     document.getElementById('table-wrap').style.display = 'block';
+    document.getElementById('tab-count-main').textContent = outputRows.length;
     document.getElementById('last-updated').style.display = 'block';
     document.getElementById('last-updated').textContent = 'Loaded at ' + new Date().toLocaleTimeString('en-GB');
     // Set list updated bar
@@ -1809,7 +1810,6 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
   tracker.style.display = 'block';
 
   const currentAvg = totalRepairs / adjustedDays;
-  console.log('[tracker] totalRepairs:', totalRepairs, 'adjustedDays:', adjustedDays, 'avg:', currentAvg.toFixed(2));
   const targets = [
     { id: '18', target: 18, bonus: 25 },
     { id: '21', target: 21, bonus: 50 },
@@ -1832,9 +1832,8 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
     const pctEl = document.getElementById('pct-' + t.id);
     const statusEl = document.getElementById('status-' + t.id);
 
-    console.log('[tracker] bar-' + t.id + ' width:', pct.toFixed(1) + '%', 'bar element:', !!bar);
-    if (bar) bar.style.width = pct.toFixed(1) + '%';
-    if (pctEl) pctEl.textContent = pct.toFixed(0) + '%';
+    bar.style.width = pct.toFixed(1) + '%';
+    pctEl.textContent = pct.toFixed(0) + '%';
 
     if (currentAvg >= t.target) {
       statusEl.textContent = isPastMonth ? '✓ Achieved' : '✓ On track';
@@ -1974,7 +1973,17 @@ function renderHistory() {
   // Load saved adjustment from Firebase metadata
   const savedAdj = historyData['_meta'] ? (historyData['_meta'].daysAdjustment || 0) : 0;
   daysAdjustment = savedAdj;
-  const adjustedDays = Math.max(baseDaysWorked > 0 ? 0.5 : 0, baseDaysWorked + daysAdjustment);
+
+  // For a specific month, count only that month's worked days from filtered entries
+  let adjustedDays;
+  if (activeMonthFilter !== 'all') {
+    const monthWorkedDays = new Set(
+      allEntries.filter(e => (e.count||0) > 0 || (e.berCount||0) > 0).map(e => e.date)
+    ).size;
+    adjustedDays = Math.max(monthWorkedDays > 0 ? 0.5 : 0, monthWorkedDays);
+  } else {
+    adjustedDays = Math.max(baseDaysWorked > 0 ? 0.5 : 0, baseDaysWorked + daysAdjustment);
+  }
   const avgRepairs = adjustedDays > 0 ? (totalRepairs / adjustedDays).toFixed(1) : '0';
   document.getElementById('hist-total-parts').textContent = allEntries.length;
   document.getElementById('hist-total-repairs').textContent = totalRepairs;

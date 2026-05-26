@@ -1739,6 +1739,58 @@ function addBerToHistory(date, key) {
 }
 
 
+// Month filter state
+let activeMonthFilter = 'all';
+
+function setMonthFilter(month, btn) {
+  activeMonthFilter = month;
+  document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderHistory();
+}
+
+function buildMonthButtons() {
+  const bar = document.getElementById('month-filter-bar');
+  if (!bar) return;
+  const months = new Set();
+  Object.keys(historyData).forEach(date => {
+    if (date === '_meta') return;
+    months.add(date.slice(0, 7));
+  });
+  let btns = '<button class="month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '') + '" onclick="setMonthFilter(\'all\', this)">All Time</button>';
+  [...months].sort().reverse().forEach(m => {
+    const d = new Date(m + '-01');
+    const label = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
+    const isActive = activeMonthFilter === m;
+    btns += '<button class="month-btn' + (isActive ? ' active' : '') + '" onclick="setMonthFilter(\'' + m + '\', this)">' + label + '</button>';
+  });
+  bar.innerHTML = btns;
+}
+
+function updateMonthSummary(filteredEntries, monthKey) {
+  const card = document.getElementById('month-summary-card');
+  if (!card) return;
+  if (monthKey === 'all' || filteredEntries.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'grid';
+  const repairs = filteredEntries.reduce((s, e) => s + (e.count || 0), 0);
+  const earned = filteredEntries.reduce((s, e) => s + (e.earned || 0), 0);
+  const workDays = new Set(filteredEntries.filter(e => (e.count||0)>0||(e.berCount||0)>0).map(e=>e.date)).size;
+  const avg = workDays > 0 ? repairs / workDays : 0;
+  const commission = calcCommission(avg);
+  const d = new Date(monthKey + '-01');
+  const monthLabel = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  document.getElementById('ms-month').textContent = monthLabel;
+  document.getElementById('ms-repairs').textContent = repairs;
+  document.getElementById('ms-days').textContent = workDays;
+  document.getElementById('ms-avg').textContent = avg.toFixed(1);
+  document.getElementById('ms-earned').textContent = '£' + earned.toFixed(2);
+  document.getElementById('ms-commission-badge').textContent = commission.label;
+  document.getElementById('ms-commission-badge').style.background = commission.color;
+  document.getElementById('ms-commission').textContent = commission.amount > 0 ? '+£' + commission.amount : '£0';
+  document.getElementById('ms-commission').style.color = commission.amount > 0 ? 'var(--green)' : 'var(--muted)';
+  document.getElementById('ms-total').textContent = '£' + (earned + commission.amount).toFixed(2);
+}
+
 function calcCommission(avgPerDay) {
   if (avgPerDay >= 24) return { label: '24/day ✓', amount: 75, color: '#2ecc71' };
   if (avgPerDay >= 21) return { label: '21/day ✓', amount: 50, color: '#f0a040' };
@@ -1838,7 +1890,6 @@ function getDateRowStyle(dateStr) {
 }
 
 function renderHistory() {
-  console.log('[renderHistory] historyData keys:', Object.keys(historyData), 'activeMonthFilter:', activeMonthFilter);
   const tbody = document.getElementById('history-body');
   tbody.innerHTML = '';
 
@@ -1853,7 +1904,6 @@ function renderHistory() {
     });
   });
 
-  console.log('[renderHistory] allEntries count:', allEntries.length);
 
   // Build month filter buttons and update month summary
   buildMonthButtons();

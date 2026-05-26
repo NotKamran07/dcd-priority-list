@@ -1970,19 +1970,24 @@ function renderHistory() {
     if (hasWork) daysWithWork.add(date);
   });
   baseDaysWorked = daysWithWork.size;
-  // Load saved adjustment from Firebase metadata
-  const savedAdj = historyData['_meta'] ? (historyData['_meta'].daysAdjustment || 0) : 0;
-  daysAdjustment = savedAdj;
 
-  // For a specific month, count only that month's worked days from filtered entries
+  // Load per-month adjustments from Firebase metadata
+  const metaAdj = (historyData['_meta'] && historyData['_meta'].adj) ? historyData['_meta'].adj : {};
+  if (typeof daysAdjustment !== 'object') daysAdjustment = {};
+  Object.assign(daysAdjustment, metaAdj);
+
+  // For a specific month, count only that month's worked days
   let adjustedDays;
   if (activeMonthFilter !== 'all') {
     const monthWorkedDays = new Set(
       allEntries.filter(e => (e.count||0) > 0 || (e.berCount||0) > 0).map(e => e.date)
     ).size;
-    adjustedDays = Math.max(monthWorkedDays > 0 ? 0.5 : 0, monthWorkedDays);
+    monthBaseDays[activeMonthFilter] = monthWorkedDays;
+    const monthAdj = daysAdjustment[activeMonthFilter] || 0;
+    adjustedDays = Math.max(monthWorkedDays > 0 ? 0.5 : 0, monthWorkedDays + monthAdj);
   } else {
-    adjustedDays = Math.max(baseDaysWorked > 0 ? 0.5 : 0, baseDaysWorked + daysAdjustment);
+    const allAdj = daysAdjustment['alltime'] || 0;
+    adjustedDays = Math.max(baseDaysWorked > 0 ? 0.5 : 0, baseDaysWorked + allAdj);
   }
   const avgRepairs = adjustedDays > 0 ? (totalRepairs / adjustedDays).toFixed(1) : '0';
   document.getElementById('hist-total-parts').textContent = allEntries.length;
@@ -2002,17 +2007,24 @@ function renderHistory() {
 }
 
 // Days worked manual adjustment (persisted in Firebase)
-let daysAdjustment = 0;
+let daysAdjustment = {}; // per-month adjustments
 let baseDaysWorked = 0;
+let monthBaseDays = {}; // base days per month
 
 function adjustDaysWorked(delta) {
-  const newAdj = daysAdjustment + delta;
-  // Don't let adjusted days go below 0.5 or be unreasonably high
-  const minDays = baseDaysWorked > 0 ? 0.5 : 0;
-  daysAdjustment = Math.max(-(baseDaysWorked - minDays), newAdj);
-  const adjustedDays = Math.max(0.5, baseDaysWorked + daysAdjustment);
-  // Save adjustment to Firebase so it persists
-  if (HISTORY_REF) HISTORY_REF.child('_meta/daysAdjustment').set(daysAdjustment);
+  // Per-month adjustments stored separately e.g. _meta/adj/2026-03
+  const monthKey = activeMonthFilter === 'all' ? 'alltime' : activeMonthFilter;
+  const currentAdj = typeof daysAdjustment === 'object' ? (daysAdjustment[monthKey] || 0) : (activeMonthFilter === 'all' ? (daysAdjustment || 0) : 0);
+  const base = activeMonthFilter === 'all' ? baseDaysWorked : (monthBaseDays[monthKey] || baseDaysWorked);
+  const minDays = base > 0 ? 0.5 : 0;
+  const newAdj = Math.max(-(base - minDays), currentAdj + delta);
+
+  if (typeof daysAdjustment !== 'object') daysAdjustment = {};
+  daysAdjustment[monthKey] = newAdj;
+
+  const adjustedDays = Math.max(0.5, base + newAdj);
+  // Save per-month adjustment to Firebase
+  if (HISTORY_REF) HISTORY_REF.child('_meta/adj/' + monthKey).set(newAdj);
   updateDaysDisplay(adjustedDays);
 }
 

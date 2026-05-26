@@ -1971,10 +1971,11 @@ function renderHistory() {
   });
   baseDaysWorked = daysWithWork.size;
 
-  // Load per-month adjustments from Firebase metadata
+  // Load per-month adjustments from Firebase metadata (merge, don't overwrite)
   const metaAdj = (historyData['_meta'] && historyData['_meta'].adj) ? historyData['_meta'].adj : {};
   if (typeof daysAdjustment !== 'object') daysAdjustment = {};
-  Object.assign(daysAdjustment, metaAdj);
+  // Only merge from Firebase - don't reset local changes
+  Object.keys(metaAdj).forEach(k => { if (daysAdjustment[k] === undefined) daysAdjustment[k] = metaAdj[k]; });
 
   // For a specific month, count only that month's worked days
   let adjustedDays;
@@ -2020,7 +2021,7 @@ function adjustDaysWorked(delta) {
   const newAdj = Math.max(-(base - minDays), currentAdj + delta);
 
   if (typeof daysAdjustment !== 'object') daysAdjustment = {};
-  daysAdjustment[monthKey] = newAdj;
+  daysAdjustment[monthKey] = newAdj; // only update this month
 
   const adjustedDays = Math.max(0.5, base + newAdj);
   // Save per-month adjustment to Firebase

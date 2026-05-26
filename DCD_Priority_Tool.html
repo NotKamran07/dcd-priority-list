@@ -1534,6 +1534,7 @@ function switchHistorySub(sub, btn) {
   btn.classList.add('active');
   document.getElementById('hist-history-section').style.display = sub === 'history' ? 'block' : 'none';
   document.getElementById('hist-import-section').style.display = sub === 'import' ? 'block' : 'none';
+  if (sub === 'history') renderHistory();
 }
 
 function handleImportFile(input) {
@@ -1688,8 +1689,20 @@ function confirmImport() {
 
   const importedCount = importData.length;
   clearImportPreview();
+  // Reset month filter to all so imported data is visible
+  activeMonthFilter = 'all';
   alert('✓ ' + importedCount + ' entries imported successfully!');
   switchHistorySub('history', document.getElementById('sub-history'));
+  // Force re-render after Firebase transactions settle
+  setTimeout(() => {
+    if (HISTORY_REF) {
+      HISTORY_REF.once('value', snap => {
+        historyData = snap.val() || {};
+        renderHistory();
+        updateHistoryCount();
+      });
+    }
+  }, 1000);
 }
 
 function clearImportPreview() {

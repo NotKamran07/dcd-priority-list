@@ -341,14 +341,13 @@
 
   /* Admin Upload Panel */
   #admin-btn {
-    position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 500;
-    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.65rem;
+    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.62rem;
     letter-spacing: 0.05em; text-transform: uppercase;
-    padding: 6px 14px; border-radius: 20px; cursor: pointer;
+    padding: 4px 10px; border-radius: 20px; cursor: pointer;
     background: var(--surface2); color: var(--muted);
     border: 1px solid var(--border); transition: all 0.2s;
   }
-  #admin-btn:hover { color: var(--text); border-color: var(--muted); }
+  #admin-btn:hover { color: var(--accent2); border-color: var(--accent2); }
 
   #admin-overlay {
     display: none; position: fixed; inset: 0;
@@ -461,6 +460,7 @@
       <span id="active-user-name">—</span>
       <span id="active-user-switch">switch</span>
     </div>
+    <button id="admin-btn" onclick="openAdmin()" style="display:none;">⬆ Upload</button>
     <div id="theme-toggle" onclick="toggleTheme()">
       <span class="toggle-label" id="theme-label">🌙 Dark</span>
       <div class="toggle-track"><div class="toggle-thumb"></div></div>
@@ -1128,6 +1128,7 @@ function loginAs(userId) {
     document.getElementById('active-user-badge').style.display = 'flex';
     document.getElementById('active-user-name').textContent = user.name;
     document.getElementById('header-user-dot').style.background = user.color;
+    document.getElementById('admin-btn').style.display = 'inline-block';
 
     // Hide login screen
     document.getElementById('login-screen').style.display = 'none';
@@ -2443,8 +2444,6 @@ document.addEventListener('click', e => {
 
 // loadAll() is called after login
 </script>
-<!-- Admin Upload Button -->
-<button id="admin-btn" onclick="openAdmin()">⬆ Admin Upload</button>
 
 <!-- Admin Overlay -->
 <div id="admin-overlay">

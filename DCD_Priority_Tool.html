@@ -1891,12 +1891,12 @@ function buildMonthButtons() {
     if (date === '_meta') return;
     months.add(date.slice(0, 7));
   });
-  let btns = '<button class="month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '') + '" onclick="setMonthFilter(\'all\', this)">All Time</button>';
+  let btns = '<button class="month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '') + '" data-month="all" onclick="setMonthFilter(this.dataset.month, this)">All Time</button>';
   [...months].sort().reverse().forEach(m => {
     const d = new Date(m + '-01');
     const label = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
     const isActive = activeMonthFilter === m;
-    btns += '<button class="month-btn' + (isActive ? ' active' : '') + '" onclick="setMonthFilter(\'' + m + '\', this)">' + label + '</button>';
+    btns += '<button class="month-btn' + (isActive ? ' active' : '') + '" data-month="' + m + '" onclick="setMonthFilter(this.dataset.month, this)">' + label + '</button>';
   });
   bar.innerHTML = btns;
 }
@@ -2370,7 +2370,7 @@ function renderGradingsTab() {
     const cnt = counts[g] || 0;
     const isActive = gradingsFilter === g;
     const bc = isActive ? c.border : 'var(--border)';
-    cardsHTML += '<div class="grade-card' + (isActive ? ' active' : '') + '" style="--card-color:' + c.border + ';border-color:' + bc + ';" onclick="setGradingsFilter(\'' + g + '\')">';
+    cardsHTML += '<div class="grade-card' + (isActive ? ' active' : '') + '" style="--card-color:' + c.border + ';border-color:' + bc + ';" data-grade="' + g + '" onclick="setGradingsFilter(this.dataset.grade)">';
     cardsHTML += '<div class="grade-card-letter" style="background:' + c.bg + ';color:' + c.text + ';">' + g + '</div>';
     cardsHTML += '<span class="grade-card-count" style="color:var(--text);">' + cnt + '</span>';
     cardsHTML += '<div class="grade-card-label">parts</div>';
@@ -2379,7 +2379,7 @@ function renderGradingsTab() {
   });
   if (noGrade > 0) {
     const isActive = gradingsFilter === 'none';
-    cardsHTML += '<div class="grade-card' + (isActive ? ' active' : '') + '" style="--card-color:var(--muted);border-color:' + (isActive ? 'var(--muted)' : 'var(--border)') + ';" onclick="setGradingsFilter(\'none\')">';
+    cardsHTML += '<div class="grade-card' + (isActive ? ' active' : '') + '" style="--card-color:var(--muted);border-color:' + (isActive ? 'var(--muted)' : 'var(--border)') + ';" data-grade="none" onclick="setGradingsFilter(this.dataset.grade)">';
     cardsHTML += '<div class="grade-card-letter" style="background:var(--surface2);color:var(--muted);">?</div>';
     cardsHTML += '<span class="grade-card-count">' + noGrade + '</span>';
     cardsHTML += '<div class="grade-card-label">no grade</div>';

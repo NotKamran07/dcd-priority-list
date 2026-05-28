@@ -1282,7 +1282,8 @@ async function loadAll() {
     });
     const gradeMap = window.gradeMap;
 
-    const pbiMap = {};
+    window.pbiMap = {};
+    const pbiMap = window.pbiMap;
     pbiRows.forEach(r => {
       const id = (r['Part ID'] || '').toString().trim();
       if (!id || !DCD_PARTS.has(id)) return;
@@ -2327,17 +2328,16 @@ let gradingsFilter = 'all';
 let gradingsData = []; // built from pbiMap + gradeMap after loadAll
 
 function buildGradingsData() {
-  if (!window.gradeMap) return;
   gradingsData = [];
   const GRADE_VALUE_MAP = { A: 0.25, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
-  // Use DCD_PARTS as the master list
+  const gm = window.gradeMap || {};
+  const pm = window.pbiMap || {};
   DCD_PARTS.forEach(partId => {
-    const cls = (window.gradeMap[partId] || '').toUpperCase();
+    const cls = (gm[partId] || '').toUpperCase();
     const val = GRADE_VALUE_MAP[cls] || null;
-    // Get team from pbiMap if available
-    const pbiRow = outputRows.find(r => r['Part ID'] === partId);
-    const team = pbiRow ? (pbiRow['Repair Team'] || '') : '';
-    const stock = pbiRow ? (pbiRow['Total Qty'] || 0) : 0;
+    const pbi = pm[partId];
+    const team = pbi ? (pbi.team || '') : '';
+    const stock = pbi ? (pbi.totalBad || 0) : 0;
     gradingsData.push({ partId, cls, val, team, stock });
   });
 }

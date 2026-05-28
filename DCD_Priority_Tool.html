@@ -339,60 +339,6 @@
     color: white; font-family: 'Syne', sans-serif; font-weight: 700;
   }
 
-  /* Admin Upload Panel */
-  #admin-btn {
-    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.62rem;
-    letter-spacing: 0.05em; text-transform: uppercase;
-    padding: 4px 10px; border-radius: 20px; cursor: pointer;
-    background: var(--surface2); color: var(--muted);
-    border: 1px solid var(--border); transition: all 0.2s;
-  }
-  #admin-btn:hover { color: var(--accent2); border-color: var(--accent2); }
-
-  #admin-overlay {
-    display: none; position: fixed; inset: 0;
-    background: rgba(0,0,0,0.7); z-index: 3000;
-    align-items: center; justify-content: center;
-  }
-  #admin-overlay.open { display: flex; }
-  #admin-box {
-    background: var(--surface); border: 1px solid var(--border);
-    border-radius: 8px; padding: 1.8rem; width: 480px; max-width: 95vw;
-  }
-  #admin-box h2 { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1rem; margin-bottom: 1.2rem; }
-  .admin-upload-zone {
-    border: 2px dashed var(--border); border-radius: 6px;
-    padding: 1.2rem; text-align: center; cursor: pointer;
-    transition: border-color 0.2s; margin-bottom: 1rem; position: relative;
-  }
-  .admin-upload-zone:hover { border-color: var(--accent2); }
-  .admin-upload-zone.loaded { border-color: var(--green); border-style: solid; }
-  .admin-upload-zone input[type=file] { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
-  .admin-upload-label { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem; margin-bottom: 4px; }
-  .admin-upload-status { font-size: 0.68rem; color: var(--muted); margin-top: 4px; }
-  .admin-upload-status.ok { color: var(--green); }
-  #admin-login { display: flex; flex-direction: column; gap: 0.75rem; }
-  #admin-pwd {
-    background: var(--surface2); border: 1px solid var(--border);
-    color: var(--text); font-family: 'IBM Plex Mono', monospace;
-    font-size: 0.8rem; padding: 0.5rem 0.8rem; border-radius: 3px;
-    outline: none; width: 100%;
-  }
-  #admin-pwd:focus { border-color: var(--muted); }
-  #admin-progress {
-    display: none; height: 6px; background: var(--surface2);
-    border-radius: 3px; overflow: hidden; margin: 0.5rem 0;
-  }
-  #admin-progress-fill { height: 100%; background: var(--green); width: 0%; transition: width 0.3s; border-radius: 3px; }
-  .admin-btn-row { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 0.5rem; }
-  .admin-action-btn {
-    font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem;
-    text-transform: uppercase; letter-spacing: 0.04em;
-    padding: 0.5rem 1.2rem; cursor: pointer; border-radius: 3px;
-    transition: opacity 0.2s;
-  }
-  .admin-action-btn:hover { opacity: 0.8; }
-
   @media print {
     @page { size: A4 landscape; margin: 0.3cm; }
     * { box-sizing: border-box; }
@@ -460,7 +406,6 @@
       <span id="active-user-name">—</span>
       <span id="active-user-switch">switch</span>
     </div>
-    <button id="admin-btn" onclick="openAdmin()" style="display:none;">⬆ Upload</button>
     <div id="theme-toggle" onclick="toggleTheme()">
       <span class="toggle-label" id="theme-label">🌙 Dark</span>
       <div class="toggle-track"><div class="toggle-thumb"></div></div>
@@ -641,16 +586,6 @@
     <div class="month-stat">
       <span class="month-stat-label">Total Income</span>
       <span class="month-stat-value" id="ms-total" style="color:var(--green);font-size:1.2rem;">£0.00</span>
-    </div>
-  </div>
-  <!-- Grade breakdown (left column in side-by-side layout) -->
-  <div id="ms-grade-breakdown" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);display:none;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;">
-      <div style="flex:0 0 auto;">
-        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.6rem;">Repairs by Grade</div>
-        <div id="ms-grade-bars" style="display:flex;gap:0.6rem;align-items:flex-end;"></div>
-      </div>
-      <div id="ms-tracker-col" style="display:none;width:264px;flex-shrink:0;margin-right:20%;"></div>
     </div>
   </div>
 
@@ -932,44 +867,22 @@ function resetTicks() {
 }
 
 async function fetchFile(filename) {
-  // Map filename to Firebase DB key
-  const keyMap = {
-    'Both PowerBi Complete.xlsx': 'powerbi',
-    'New Repair Centre Back Order Report v1.csv': 'backorder',
-    'Part Gradings.csv': 'gradings'
-  };
-  const dbKey = keyMap[filename];
-
-  // Try Firebase Database first (uploaded via admin panel)
-  if (dbKey) {
-    try {
-      const snap = await db.ref('files/' + dbKey).once('value');
-      const entry = snap.val();
-      if (entry && entry.data) {
-        // Convert base64 back to ArrayBuffer
-        const binary = atob(entry.data);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-        return bytes.buffer;
-      }
-    } catch(e) {
-      // Fall through to GitHub
-    }
-  }
-
-  // Fall back to GitHub
+  // Use cache-busting timestamp to always get latest file
   const bust = Date.now();
   const urls = [
     `https://raw.githubusercontent.com/NotKamran07/dcd-priority-list/main/${encodeURIComponent(filename)}?t=${bust}`,
     `https://cdn.jsdelivr.net/gh/NotKamran07/dcd-priority-list@main/${encodeURIComponent(filename)}?t=${bust}`
   ];
+  
   for (const url of urls) {
     try {
       const res = await fetch(url, { cache: 'no-store' });
       if (res.ok) return await res.arrayBuffer();
-    } catch(e) { continue; }
+    } catch(e) {
+      continue;
+    }
   }
-  throw new Error(`Could not load "${filename}"`);
+  throw new Error(`Could not load "${filename}" — check the file exists in your GitHub repository and is named correctly.`);
 }
 
 async function loadXLSX(filename) {
@@ -1138,7 +1051,6 @@ function loginAs(userId) {
     document.getElementById('active-user-badge').style.display = 'flex';
     document.getElementById('active-user-name').textContent = user.name;
     document.getElementById('header-user-dot').style.background = user.color;
-    document.getElementById('admin-btn').style.display = 'inline-block';
 
     // Hide login screen
     document.getElementById('login-screen').style.display = 'none';
@@ -1180,17 +1092,6 @@ function switchUser() {
 }
 
 function startFirebaseListeners() {
-  // Listen for admin file uploads - reload data when files are updated
-  db.ref('lastUpdated').on('value', snap => {
-    const ts = snap.val();
-    if (ts && window._lastUpdatedTs && ts > window._lastUpdatedTs && dataLoaded) {
-      window._lastUpdatedTs = ts;
-      loadAll(); // auto-reload for all users when admin uploads new files
-    } else if (ts) {
-      window._lastUpdatedTs = ts;
-    }
-  });
-
   TICKS_REF.on('value', snap => {
     ticks = snap.val() || {};
     // Also write to allTicks so others can see
@@ -1867,26 +1768,23 @@ function buildMonthButtons() {
   bar.innerHTML = btns;
 }
 
-function updateMonthSummary(filteredEntries, monthKey) {
+function updateMonthSummary(filteredEntries, monthKey, passedDays) {
   const card = document.getElementById('month-summary-card');
   if (!card) return;
-  if (monthKey === 'all' || filteredEntries.length === 0) {
-    card.style.display = 'none';
-    const bd = document.getElementById('ms-grade-breakdown');
-    if (bd) bd.style.display = 'none';
-    return;
-  }
+  if (monthKey === 'all' || filteredEntries.length === 0) { card.style.display = 'none'; return; }
   card.style.display = 'grid';
   const repairs = filteredEntries.reduce((s, e) => s + (e.count || 0), 0);
   const earned = filteredEntries.reduce((s, e) => s + (e.earned || 0), 0);
-  const workDays = new Set(filteredEntries.filter(e => (e.count||0)>0||(e.berCount||0)>0).map(e=>e.date)).size;
+  // Use passedDays (adjusted) if provided, otherwise count from entries
+  const rawDays = new Set(filteredEntries.filter(e => (e.count||0)>0||(e.berCount||0)>0).map(e=>e.date)).size;
+  const workDays = passedDays !== undefined ? passedDays : rawDays;
   const avg = workDays > 0 ? repairs / workDays : 0;
   const commission = calcCommission(avg);
   const d = new Date(monthKey + '-01');
   const monthLabel = d.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
   document.getElementById('ms-month').textContent = monthLabel;
   document.getElementById('ms-repairs').textContent = repairs;
-  document.getElementById('ms-days').textContent = workDays;
+  document.getElementById('ms-days').textContent = workDays % 1 === 0 ? workDays : workDays.toFixed(1);
   document.getElementById('ms-avg').textContent = avg.toFixed(1);
   document.getElementById('ms-earned').textContent = '£' + earned.toFixed(2);
   document.getElementById('ms-commission-badge').textContent = commission.label;
@@ -1894,44 +1792,6 @@ function updateMonthSummary(filteredEntries, monthKey) {
   document.getElementById('ms-commission').textContent = commission.amount > 0 ? '+£' + commission.amount : '£0';
   document.getElementById('ms-commission').style.color = commission.amount > 0 ? 'var(--green)' : 'var(--muted)';
   document.getElementById('ms-total').textContent = '£' + (earned + commission.amount).toFixed(2);
-
-  // Grade breakdown — X, S, C, A, M, BER order
-  const gradeOrder = ['X', 'S', 'C', 'A', 'M', 'BER'];
-  const gradeColors = { X: '#1a7a3a', S: '#4caf50', C: '#f0d040', A: '#e0a020', M: '#e07020', BER: '#c00000' };
-  const gradeValues = { X: 3.00, S: 1.25, C: 0.75, A: 0.25, M: 0.10, BER: 0.10 };
-  const gradeCounts = {};
-
-  // Count repairs by grade
-  filteredEntries.forEach(e => {
-    const cls = (e.cls || '').toUpperCase();
-    if (!cls) return;
-    gradeCounts[cls] = (gradeCounts[cls] || 0) + (e.count || 0);
-  });
-
-  // Count BERs separately
-  const berTotal = filteredEntries.reduce((s, e) => s + (e.berCount || 0), 0);
-  if (berTotal > 0) gradeCounts['BER'] = berTotal;
-
-  const breakdown = document.getElementById('ms-grade-breakdown');
-  const barsEl = document.getElementById('ms-grade-bars');
-  const hasGrades = Object.keys(gradeCounts).length > 0;
-  breakdown.style.display = hasGrades ? 'block' : 'none';
-
-  if (hasGrades) {
-    const maxCount = Math.max(...Object.values(gradeCounts));
-    barsEl.innerHTML = gradeOrder.filter(g => gradeCounts[g] > 0).map(g => {
-      const count = gradeCounts[g] || 0;
-      const barH = Math.max(20, Math.round((count / maxCount) * 80));
-      const gradeEarned = (count * (gradeValues[g] || 0)).toFixed(2);
-      const color = gradeColors[g];
-      return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:48px;">
-        <div style="font-size:0.65rem;color:var(--muted);">£${gradeEarned}</div>
-        <div style="font-size:0.75rem;font-weight:700;color:${color};">${count}</div>
-        <div style="width:40px;height:${barH}px;background:${color};border-radius:3px 3px 0 0;opacity:0.85;"></div>
-        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.75rem;color:${color};">${g}</div>
-      </div>`;
-    }).join('');
-  }
 }
 
 function calcCommission(avgPerDay) {
@@ -1947,17 +1807,9 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
   // Hide on All Time view
   if (activeMonthFilter === 'all' || adjustedDays <= 0 || totalRepairs <= 0) {
     tracker.style.display = 'none';
-    const tc = document.getElementById('ms-tracker-col');
-    if (tc) tc.style.display = 'none';
     return;
   }
-  // If month is selected, render tracker inside the grade breakdown column
-  const trackerCol = document.getElementById('ms-tracker-col');
-  if (activeMonthFilter !== 'all' && trackerCol) {
-    tracker.style.display = 'none'; // hide standalone tracker
-  } else {
-    tracker.style.display = 'block';
-  }
+  tracker.style.display = 'block';
 
   const currentAvg = totalRepairs / adjustedDays;
   const targets = [
@@ -1974,55 +1826,6 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const workingDaysInMonth = Math.round(daysInMonth * 22 / 30);
   const remainingDays = Math.max(0, workingDaysInMonth - adjustedDays);
-
-  // When viewing a specific month, render tracker inline in grade column
-  const trackerColEl = document.getElementById('ms-tracker-col');
-  if (activeMonthFilter !== 'all' && trackerColEl) {
-    // Build inline tracker HTML
-    const isPastMonthInline = activeMonthFilter < TODAY.slice(0, 7);
-    trackerColEl.style.display = 'block';
-    let inlineHTML = '<div style="font-family:Syne,sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.75rem;">Monthly Target</div>';
-    targets.forEach(t => {
-      const pct = Math.min(100, (currentAvg / t.target) * 100);
-      let statusTxt = '', statusColor = 'var(--muted)';
-      if (currentAvg >= t.target) { statusTxt = isPastMonthInline ? '✓ Achieved' : '✓ On track'; statusColor = 'var(--green)'; }
-      else if (isPastMonthInline) { statusTxt = (t.target - currentAvg).toFixed(1) + ' short'; statusColor = 'var(--accent)'; }
-      else {
-        const totalNeeded = t.target * Math.round(new Date(activeMonthFilter.slice(0,4), parseInt(activeMonthFilter.slice(5,7)), 0).getDate() * 22 / 30);
-        const remaining = Math.max(0, totalNeeded - totalRepairs);
-        const remDays = Math.max(0, Math.round(new Date(activeMonthFilter.slice(0,4), parseInt(activeMonthFilter.slice(5,7)), 0).getDate() * 22 / 30) - adjustedDays);
-        statusTxt = remDays > 0 ? '+' + (remaining / remDays).toFixed(1) + '/day' : '∞'; statusColor = 'var(--accent)';
-      }
-      const barColor = t.id === '18' ? '#f0c040' : t.id === '21' ? '#f0a040' : '#2ecc71';
-      inlineHTML += '<div style="margin-bottom:0.5rem;">'
-        + '<div style="display:flex;justify-content:space-between;font-size:0.65rem;margin-bottom:3px;">'
-        + '<span style="color:var(--muted);">' + t.target + '/day <span style="color:' + barColor + ';">+£' + t.bonus + '</span></span>'
-        + '<span style="color:' + statusColor + ';font-weight:600;">' + statusTxt + '</span>'
-        + '</div>'
-        + '<div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">'
-        + '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + barColor + ';border-radius:4px;transition:width 0.4s;"></div>'
-        + '</div>'
-        + '<div style="font-size:0.6rem;color:var(--muted);margin-top:2px;text-align:right;">' + pct.toFixed(0) + '%</div>'
-        + '</div>';
-    });
-    const commission2 = calcCommission(currentAvg);
-    const isPast2 = activeMonthFilter < TODAY.slice(0,7);
-    let projMsg = (isPast2 ? 'Final avg: ' : 'Current avg: ') + '<strong style="color:var(--text);">' + currentAvg.toFixed(1) + '/day</strong>';
-    if (commission2.amount > 0) projMsg += ' — <strong style="color:' + commission2.color + ';">£' + commission2.amount + ' commission</strong>';
-    else projMsg += ' — <span style="color:var(--accent);">Need ' + (18 - currentAvg).toFixed(1) + ' more/day for £25</span>';
-    inlineHTML += '<div style="font-size:0.65rem;color:var(--muted);margin-top:0.6rem;padding-top:0.5rem;border-top:1px solid var(--border);line-height:1.6;">' + projMsg + '</div>';
-    trackerColEl.innerHTML = inlineHTML;
-
-    // Update standalone bar elements too (needed for non-month view)
-    targets.forEach(t => {
-      const pct = Math.min(100, (currentAvg / t.target) * 100);
-      const bar = document.getElementById('bar-' + t.id);
-      const pctEl = document.getElementById('pct-' + t.id);
-      if (bar) bar.style.width = pct.toFixed(1) + '%';
-      if (pctEl) pctEl.textContent = pct.toFixed(0) + '%';
-    });
-    return;
-  }
 
   targets.forEach(t => {
     // Bar fills based on actual avg vs target — capped at 100%
@@ -2107,7 +1910,7 @@ function renderHistory() {
 
   // Build month filter buttons and update month summary
   buildMonthButtons();
-  updateMonthSummary(allEntries, activeMonthFilter);
+  updateMonthSummary(allEntries, activeMonthFilter, activeMonthFilter !== 'all' ? adjustedDays : undefined);
 
   if (allEntries.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" class="empty-done">No history yet — complete some parts to start tracking</td></tr>`;
@@ -2232,6 +2035,13 @@ function adjustDaysWorked(delta) {
 
 function updateDaysDisplay(adjustedDays) {
   const totalRepairs = parseInt(document.getElementById('hist-total-repairs').textContent) || 0;
+  // Also update month summary card with new adjusted days
+  if (activeMonthFilter !== 'all' && historyData && historyData[activeMonthFilter]) {
+    const allEntries = [];
+    const day = historyData[activeMonthFilter];
+    if (day) Object.keys(day).forEach(k => allEntries.push({ date: activeMonthFilter, ...day[k], _key: k }));
+    updateMonthSummary(allEntries, activeMonthFilter, adjustedDays);
+  }
   const baseStr = baseDaysWorked % 1 === 0 ? baseDaysWorked : baseDaysWorked.toFixed(1);
   const adjStr = adjustedDays % 1 === 0 ? adjustedDays : adjustedDays.toFixed(1);
   const _mk = activeMonthFilter === 'all' ? 'alltime' : activeMonthFilter;
@@ -2433,176 +2243,7 @@ function exportXLSX() {
   XLSX.writeFile(wb, `DCD_Priority_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
-// ── Admin Upload ──────────────────────────────────────────────────────────────
-const ADMIN_PWD = 'Vista123@';
-// Files stored in Firebase Realtime Database as base64
-let adminFiles = { powerbi: null, backorder: null, gradings: null };
-let adminLoggedIn = false;
-
-function openAdmin() {
-  document.getElementById('admin-overlay').classList.add('open');
-  document.getElementById('admin-pwd').value = '';
-  document.getElementById('admin-pwd-error').style.display = 'none';
-  document.getElementById('admin-login').style.display = adminLoggedIn ? 'none' : 'flex';
-  document.getElementById('admin-panel').style.display = adminLoggedIn ? 'block' : 'none';
-  if (!adminLoggedIn) setTimeout(() => document.getElementById('admin-pwd').focus(), 100);
-}
-
-function closeAdmin() {
-  document.getElementById('admin-overlay').classList.remove('open');
-  adminFiles = { powerbi: null, backorder: null, gradings: null };
-  ['powerbi', 'backorder', 'gradings'].forEach(k => {
-    document.getElementById('zone-' + k).classList.remove('loaded');
-    document.getElementById('status-' + k + '-admin').textContent = k === 'gradings' ? 'Click to select file (only if updated)' : 'Click to select file';
-    document.getElementById('status-' + k + '-admin').className = 'admin-upload-status';
-  });
-  document.getElementById('admin-upload-btn').disabled = true;
-  document.getElementById('admin-progress').style.display = 'none';
-  document.getElementById('admin-progress-fill').style.width = '0%';
-  document.getElementById('admin-upload-msg').textContent = '';
-}
-
-function checkAdminPwd() {
-  const pwd = document.getElementById('admin-pwd').value;
-  if (pwd === ADMIN_PWD) {
-    adminLoggedIn = true;
-    document.getElementById('admin-login').style.display = 'none';
-    document.getElementById('admin-panel').style.display = 'block';
-    document.getElementById('admin-pwd-error').style.display = 'none';
-  } else {
-    document.getElementById('admin-pwd-error').style.display = 'block';
-    document.getElementById('admin-pwd').value = '';
-    document.getElementById('admin-pwd').focus();
-  }
-}
-
-function handleAdminFile(key, input) {
-  const file = input.files[0];
-  if (!file) return;
-  adminFiles[key] = file;
-  document.getElementById('status-' + key + '-admin').textContent = '✓ ' + file.name;
-  document.getElementById('status-' + key + '-admin').className = 'admin-upload-status ok';
-  document.getElementById('zone-' + key).classList.add('loaded');
-  // Enable upload button if at least powerbi or backorder is selected
-  const hasRequired = adminFiles.powerbi || adminFiles.backorder;
-  document.getElementById('admin-upload-btn').disabled = !hasRequired;
-}
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = e => resolve(e.target.result.split(',')[1]); // strip data:...;base64,
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-async function uploadAdminFiles() {
-  const btn = document.getElementById('admin-upload-btn');
-  const msg = document.getElementById('admin-upload-msg');
-  const progress = document.getElementById('admin-progress');
-  const fill = document.getElementById('admin-progress-fill');
-  btn.disabled = true;
-  progress.style.display = 'block';
-  msg.style.color = 'var(--muted)';
-
-  const keys = ['powerbi', 'backorder', 'gradings'];
-  const dbKeys = { powerbi: 'powerbi', backorder: 'backorder', gradings: 'gradings' };
-  const toUpload = keys.filter(k => adminFiles[k]);
-
-  try {
-    for (let i = 0; i < toUpload.length; i++) {
-      const key = toUpload[i];
-      const file = adminFiles[key];
-      msg.textContent = 'Converting ' + file.name + '...';
-      fill.style.width = ((i / toUpload.length) * 60) + '%';
-
-      const b64 = await fileToBase64(file);
-      msg.textContent = 'Saving ' + file.name + ' to database...';
-      fill.style.width = ((i / toUpload.length) * 90) + '%';
-
-      // Store base64 + metadata in Firebase DB
-      await db.ref('files/' + dbKeys[key]).set({
-        data: b64,
-        name: file.name,
-        updatedAt: Date.now()
-      });
-    }
-
-    fill.style.width = '100%';
-    msg.textContent = '✓ Uploaded successfully! All users will see the updated list.';
-    msg.style.color = 'var(--green)';
-    db.ref('lastUpdated').set(Date.now());
-
-    btn.disabled = false;
-    setTimeout(() => { closeAdmin(); loadAll(); }, 2000);
-
-  } catch(err) {
-    msg.textContent = '⚠ Upload failed: ' + err.message;
-    msg.style.color = 'var(--accent)';
-    btn.disabled = false;
-    fill.style.width = '0%';
-  }
-}
-
-// Close admin overlay on background click
-document.addEventListener('click', e => {
-  if (e.target.id === 'admin-overlay') closeAdmin();
-});
-
-// ── End Admin Upload ───────────────────────────────────────────────────────────
-
 // loadAll() is called after login
 </script>
-
-<!-- Admin Overlay -->
-<div id="admin-overlay">
-  <div id="admin-box">
-    <h2>Admin File Upload</h2>
-
-    <!-- Login -->
-    <div id="admin-login">
-      <p style="font-size:0.72rem;color:var(--muted);margin-bottom:0.5rem;">Enter admin password to upload daily files</p>
-      <input type="password" id="admin-pwd" placeholder="Password..." onkeydown="if(event.key==='Enter')checkAdminPwd()"/>
-      <div id="admin-pwd-error" style="font-size:0.68rem;color:var(--accent);display:none;">Incorrect password</div>
-      <div class="admin-btn-row">
-        <button class="admin-action-btn" onclick="closeAdmin()" style="background:transparent;color:var(--muted);border:1px solid var(--border);">Cancel</button>
-        <button class="admin-action-btn" onclick="checkAdminPwd()" style="background:var(--accent2);color:white;border:none;">Sign In</button>
-      </div>
-    </div>
-
-    <!-- Upload Panel (hidden until logged in) -->
-    <div id="admin-panel" style="display:none;">
-      <p style="font-size:0.7rem;color:var(--muted);margin-bottom:1rem;">Upload new files to update the priority list for all users.</p>
-
-      <div class="admin-upload-zone" id="zone-powerbi">
-        <input type="file" accept=".xlsx,.xls" onchange="handleAdminFile('powerbi', this)"/>
-        <div class="admin-upload-label">PowerBI Export</div>
-        <div class="admin-upload-status" id="status-powerbi-admin">Click to select .xlsx file</div>
-      </div>
-
-      <div class="admin-upload-zone" id="zone-backorder">
-        <input type="file" accept=".csv,.xlsx,.xls" onchange="handleAdminFile('backorder', this)"/>
-        <div class="admin-upload-label">Back Order Report</div>
-        <div class="admin-upload-status" id="status-backorder-admin">Click to select .csv or .xlsx file</div>
-      </div>
-
-      <div class="admin-upload-zone" id="zone-gradings" style="opacity:0.6;">
-        <input type="file" accept=".csv,.xlsx,.xls" onchange="handleAdminFile('gradings', this)"/>
-        <div class="admin-upload-label">Part Gradings <span style="font-weight:400;font-size:0.65rem;">(optional)</span></div>
-        <div class="admin-upload-status" id="status-gradings-admin">Click to select file (only if updated)</div>
-      </div>
-
-      <div id="admin-progress"><div id="admin-progress-fill"></div></div>
-      <div id="admin-upload-msg" style="font-size:0.68rem;color:var(--muted);margin-bottom:0.5rem;"></div>
-
-      <div class="admin-btn-row">
-        <button class="admin-action-btn" onclick="closeAdmin()" style="background:transparent;color:var(--muted);border:1px solid var(--border);">Cancel</button>
-        <button class="admin-action-btn" id="admin-upload-btn" onclick="uploadAdminFiles()" style="background:var(--green);color:white;border:none;" disabled>Upload Files</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 </body>
 </html>

@@ -643,10 +643,15 @@
       <span class="month-stat-value" id="ms-total" style="color:var(--green);font-size:1.2rem;">£0.00</span>
     </div>
   </div>
-  <!-- Grade breakdown -->
+  <!-- Grade breakdown (left column in side-by-side layout) -->
   <div id="ms-grade-breakdown" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);display:none;">
-    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.6rem;">Repairs by Grade</div>
-    <div id="ms-grade-bars" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:flex-end;"></div>
+    <div style="display:flex;gap:1.5rem;align-items:flex-start;flex-wrap:wrap;">
+      <div style="flex:0 0 auto;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.6rem;">Repairs by Grade</div>
+        <div id="ms-grade-bars" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:flex-end;"></div>
+      </div>
+      <div id="ms-tracker-col" style="flex:1;min-width:260px;"></div>
+    </div>
   </div>
 
   <!-- Target Tracker -->
@@ -1944,7 +1949,13 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
     tracker.style.display = 'none';
     return;
   }
-  tracker.style.display = 'block';
+  // If month is selected, render tracker inside the grade breakdown column
+  const trackerCol = document.getElementById('ms-tracker-col');
+  if (activeMonthFilter !== 'all' && trackerCol) {
+    tracker.style.display = 'none'; // hide standalone tracker
+  } else {
+    tracker.style.display = 'block';
+  }
 
   const currentAvg = totalRepairs / adjustedDays;
   const targets = [
@@ -1961,6 +1972,52 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
   const workingDaysInMonth = Math.round(daysInMonth * 22 / 30);
   const remainingDays = Math.max(0, workingDaysInMonth - adjustedDays);
+
+  // When viewing a specific month, render tracker inline in grade column
+  const trackerColEl = document.getElementById('ms-tracker-col');
+  if (activeMonthFilter !== 'all' && trackerColEl) {
+    // Build inline tracker HTML
+    const isPastMonthInline = activeMonthFilter < TODAY.slice(0, 7);
+    let inlineHTML = '<div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.75rem;">Monthly Target</div>';
+    targets.forEach(t => {
+      const pct = Math.min(100, (currentAvg / t.target) * 100);
+      let statusTxt = '', statusColor = 'var(--muted)';
+      if (currentAvg >= t.target) { statusTxt = isPastMonthInline ? '✓ Achieved' : '✓ On track'; statusColor = 'var(--green)'; }
+      else if (isPastMonthInline) { statusTxt = (t.target - currentAvg).toFixed(1) + ' short'; statusColor = 'var(--accent)'; }
+      else {
+        const totalNeeded = t.target * Math.round(new Date(activeMonthFilter.slice(0,4), parseInt(activeMonthFilter.slice(5,7)), 0).getDate() * 22 / 30);
+        const remaining = Math.max(0, totalNeeded - totalRepairs);
+        const remDays = Math.max(0, Math.round(new Date(activeMonthFilter.slice(0,4), parseInt(activeMonthFilter.slice(5,7)), 0).getDate() * 22 / 30) - adjustedDays);
+        statusTxt = remDays > 0 ? '+' + (remaining / remDays).toFixed(1) + '/day' : '∞'; statusColor = 'var(--accent)';
+      }
+      inlineHTML += `<div style="margin-bottom:0.5rem;">
+        <div style="display:flex;justify-content:space-between;font-size:0.65rem;margin-bottom:3px;">
+          <span style="color:var(--muted);">${t.target}/day <span style="color:var(--green);">+£${t.bonus}</span></span>
+          <span style="color:${statusColor};font-weight:600;">${statusTxt}</span>
+        </div>
+        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${pct.toFixed(1)}%;background:${t.id==='18'?'#f0c040':t.id==='21'?'#f0a040':'var(--green)'};border-radius:4px;transition:width 0.4s;"></div>
+        </div>
+      </div>`;
+    });
+    // Projection
+    const commission2 = calcCommission(currentAvg);
+    const isPast2 = activeMonthFilter < TODAY.slice(0,7);
+    let projMsg = (isPast2 ? 'Final avg: ' : 'Current avg: ') + '<strong style="color:var(--text);">' + currentAvg.toFixed(1) + '/day</strong>';
+    if (commission2.amount > 0) projMsg += ' — <strong style="color:' + commission2.color + ';">£' + commission2.amount + ' commission</strong>';
+    inlineHTML += '<div style="font-size:0.65rem;color:var(--muted);margin-top:0.5rem;line-height:1.6;">' + projMsg + '</div>';
+    trackerColEl.innerHTML = inlineHTML;
+
+    // Update standalone bar elements too (needed for non-month view)
+    targets.forEach(t => {
+      const pct = Math.min(100, (currentAvg / t.target) * 100);
+      const bar = document.getElementById('bar-' + t.id);
+      const pctEl = document.getElementById('pct-' + t.id);
+      if (bar) bar.style.width = pct.toFixed(1) + '%';
+      if (pctEl) pctEl.textContent = pct.toFixed(0) + '%';
+    });
+    return;
+  }
 
   targets.forEach(t => {
     // Bar fills based on actual avg vs target — capped at 100%

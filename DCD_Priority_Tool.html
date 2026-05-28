@@ -1947,6 +1947,8 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
   // Hide on All Time view
   if (activeMonthFilter === 'all' || adjustedDays <= 0 || totalRepairs <= 0) {
     tracker.style.display = 'none';
+    const tc = document.getElementById('ms-tracker-col');
+    if (tc) tc.style.display = 'none';
     return;
   }
   // If month is selected, render tracker inside the grade breakdown column
@@ -1978,7 +1980,9 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
   if (activeMonthFilter !== 'all' && trackerColEl) {
     // Build inline tracker HTML
     const isPastMonthInline = activeMonthFilter < TODAY.slice(0, 7);
-    let inlineHTML = '<div style="font-family:Syne,sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.75rem;">Monthly Target</div>';
+    trackerColEl.style.display = 'block';
+    let inlineHTML = '<div style="font-family:Syne,sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:1rem;">📈 Monthly Target Tracker</div>';
+    inlineHTML += '<div style="display:flex;flex-direction:column;gap:0.8rem;">';
     targets.forEach(t => {
       const pct = Math.min(100, (currentAvg / t.target) * 100);
       let statusTxt = '', statusColor = 'var(--muted)';
@@ -1991,21 +1995,24 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
         statusTxt = remDays > 0 ? '+' + (remaining / remDays).toFixed(1) + '/day' : '∞'; statusColor = 'var(--accent)';
       }
       const barColor = t.id === '18' ? '#f0c040' : t.id === '21' ? '#f0a040' : '#2ecc71';
-      inlineHTML += '<div style="margin-bottom:0.5rem;">'
-        + '<div style="display:flex;justify-content:space-between;font-size:0.65rem;margin-bottom:3px;">'
-        + '<span style="color:var(--muted);">' + t.target + '/day <span style="color:var(--green);">+£' + t.bonus + '</span></span>'
-        + '<span style="color:' + statusColor + ';font-weight:600;">' + statusTxt + '</span>'
+      inlineHTML += '<div>'
+        + '<div style="display:flex;justify-content:space-between;font-size:0.75rem;margin-bottom:5px;">'
+        + '<span style="color:var(--muted);font-weight:600;">' + t.target + '/day <span style="color:' + barColor + ';">+£' + t.bonus + '</span></span>'
+        + '<span style="color:' + statusColor + ';font-weight:700;">' + statusTxt + '</span>'
         + '</div>'
-        + '<div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">'
-        + '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + barColor + ';border-radius:4px;transition:width 0.4s;"></div>'
-        + '</div></div>';
+        + '<div style="height:12px;background:var(--surface2);border-radius:6px;overflow:hidden;">'
+        + '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + barColor + ';border-radius:6px;transition:width 0.4s;"></div>'
+        + '</div>'
+        + '<div style="font-size:0.65rem;color:var(--muted);margin-top:3px;text-align:right;">' + pct.toFixed(0) + '%</div>'
+        + '</div>';
     });
-    // Projection
+    inlineHTML += '</div>';
     const commission2 = calcCommission(currentAvg);
     const isPast2 = activeMonthFilter < TODAY.slice(0,7);
     let projMsg = (isPast2 ? 'Final avg: ' : 'Current avg: ') + '<strong style="color:var(--text);">' + currentAvg.toFixed(1) + '/day</strong>';
-    if (commission2.amount > 0) projMsg += ' — <strong style="color:' + commission2.color + ';">£' + commission2.amount + ' commission</strong>';
-    inlineHTML += '<div style="font-size:0.65rem;color:var(--muted);margin-top:0.5rem;line-height:1.6;">' + projMsg + '</div>';
+    if (commission2.amount > 0) projMsg += ' &nbsp;—&nbsp; <strong style="color:' + commission2.color + ';">£' + commission2.amount + ' commission earned</strong>';
+    else projMsg += ' &nbsp;—&nbsp; <span style="color:var(--accent);">Need ' + (18 - currentAvg).toFixed(1) + ' more/day for £25 bonus</span>';
+    inlineHTML += '<div style="font-size:0.72rem;color:var(--muted);margin-top:1rem;padding-top:0.75rem;border-top:1px solid var(--border);line-height:1.8;">' + projMsg + '</div>';
     trackerColEl.innerHTML = inlineHTML;
 
     // Update standalone bar elements too (needed for non-month view)

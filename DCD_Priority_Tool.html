@@ -1865,7 +1865,12 @@ function buildMonthButtons() {
 function updateMonthSummary(filteredEntries, monthKey) {
   const card = document.getElementById('month-summary-card');
   if (!card) return;
-  if (monthKey === 'all' || filteredEntries.length === 0) { card.style.display = 'none'; return; }
+  if (monthKey === 'all' || filteredEntries.length === 0) {
+    card.style.display = 'none';
+    const bd = document.getElementById('ms-grade-breakdown');
+    if (bd) bd.style.display = 'none';
+    return;
+  }
   card.style.display = 'grid';
   const repairs = filteredEntries.reduce((s, e) => s + (e.count || 0), 0);
   const earned = filteredEntries.reduce((s, e) => s + (e.earned || 0), 0);

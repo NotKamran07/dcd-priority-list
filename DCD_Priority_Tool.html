@@ -2421,7 +2421,7 @@ function renderGradingsTable() {
     const c = GRADE_COLOURS[r.cls] || { bg: 'var(--surface2)', text: 'var(--muted)' };
     const tr = document.createElement('tr');
     tr.style.background = bg;
-    tr.innerHTML = '<td style="font-weight:600;font-family:'IBM Plex Mono',monospace;">' + r.partId + '</td>'
+    tr.innerHTML = '<td style="font-weight:600;font-family:IBM Plex Mono,monospace;">' + r.partId + '</td>'
       + '<td style="color:var(--muted);">' + (r.team || '—') + '</td>'
       + '<td><div class="grade-pill" style="background:' + c.bg + ';color:' + c.text + ';">' + (r.cls || '?') + '</div></td>'
       + '<td style="font-weight:600;">' + (r.val ? '£' + r.val.toFixed(2) : '—') + '</td>'

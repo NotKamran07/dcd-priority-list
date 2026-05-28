@@ -339,6 +339,29 @@
     color: white; font-family: 'Syne', sans-serif; font-weight: 700;
   }
 
+  /* Admin Upload */
+  #admin-btn { font-family:'Syne',sans-serif; font-weight:700; font-size:0.62rem; letter-spacing:0.05em; text-transform:uppercase; padding:4px 10px; border-radius:20px; cursor:pointer; background:var(--surface2); color:var(--muted); border:1px solid var(--border); transition:all 0.2s; display:none; }
+  #admin-btn:hover { color:var(--accent2); border-color:var(--accent2); }
+  #admin-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:3000; align-items:center; justify-content:center; }
+  #admin-overlay.open { display:flex; }
+  #admin-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1.8rem; width:480px; max-width:95vw; }
+  #admin-box h2 { font-family:'Syne',sans-serif; font-weight:800; font-size:1rem; margin-bottom:1.2rem; }
+  .admin-upload-zone { border:2px dashed var(--border); border-radius:6px; padding:1.2rem; text-align:center; cursor:pointer; transition:border-color 0.2s; margin-bottom:1rem; position:relative; }
+  .admin-upload-zone:hover { border-color:var(--accent2); }
+  .admin-upload-zone.loaded { border-color:var(--green); border-style:solid; }
+  .admin-upload-zone input[type=file] { position:absolute; inset:0; opacity:0; cursor:pointer; width:100%; height:100%; }
+  .admin-upload-label { font-family:'Syne',sans-serif; font-weight:700; font-size:0.75rem; margin-bottom:4px; }
+  .admin-upload-status { font-size:0.68rem; color:var(--muted); margin-top:4px; }
+  .admin-upload-status.ok { color:var(--green); }
+  #admin-login { display:flex; flex-direction:column; gap:0.75rem; }
+  #admin-pwd { background:var(--surface2); border:1px solid var(--border); color:var(--text); font-family:'IBM Plex Mono',monospace; font-size:0.8rem; padding:0.5rem 0.8rem; border-radius:3px; outline:none; width:100%; }
+  #admin-pwd:focus { border-color:var(--muted); }
+  #admin-progress { display:none; height:6px; background:var(--surface2); border-radius:3px; overflow:hidden; margin:0.5rem 0; }
+  #admin-progress-fill { height:100%; background:var(--green); width:0%; transition:width 0.3s; border-radius:3px; }
+  .admin-btn-row { display:flex; gap:0.75rem; justify-content:flex-end; margin-top:0.5rem; }
+  .admin-action-btn { font-family:'Syne',sans-serif; font-weight:700; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; padding:0.5rem 1.2rem; cursor:pointer; border-radius:3px; transition:opacity 0.2s; }
+  .admin-action-btn:hover { opacity:0.8; }
+
   @media print {
     @page { size: A4 landscape; margin: 0.3cm; }
     * { box-sizing: border-box; }
@@ -406,6 +429,7 @@
       <span id="active-user-name">—</span>
       <span id="active-user-switch">switch</span>
     </div>
+    <button id="admin-btn" onclick="openAdmin()">⬆ Upload</button>
     <div id="theme-toggle" onclick="toggleTheme()">
       <span class="toggle-label" id="theme-label">🌙 Dark</span>
       <div class="toggle-track"><div class="toggle-thumb"></div></div>
@@ -867,22 +891,41 @@ function resetTicks() {
 }
 
 async function fetchFile(filename) {
-  // Use cache-busting timestamp to always get latest file
+  // Map filename to Firebase DB key
+  const keyMap = {
+    'Both PowerBi Complete.xlsx': 'powerbi',
+    'New Repair Centre Back Order Report v1.csv': 'backorder',
+    'Part Gradings.csv': 'gradings'
+  };
+  const dbKey = keyMap[filename];
+
+  // Try Firebase Database first (uploaded via admin panel)
+  if (dbKey) {
+    try {
+      const snap = await db.ref('files/' + dbKey).once('value');
+      const entry = snap.val();
+      if (entry && entry.data) {
+        const binary = atob(entry.data);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+        return bytes.buffer;
+      }
+    } catch(e) { /* fall through to GitHub */ }
+  }
+
+  // Fall back to GitHub
   const bust = Date.now();
   const urls = [
     `https://raw.githubusercontent.com/NotKamran07/dcd-priority-list/main/${encodeURIComponent(filename)}?t=${bust}`,
     `https://cdn.jsdelivr.net/gh/NotKamran07/dcd-priority-list@main/${encodeURIComponent(filename)}?t=${bust}`
   ];
-  
   for (const url of urls) {
     try {
       const res = await fetch(url, { cache: 'no-store' });
       if (res.ok) return await res.arrayBuffer();
-    } catch(e) {
-      continue;
-    }
+    } catch(e) { continue; }
   }
-  throw new Error(`Could not load "${filename}" — check the file exists in your GitHub repository and is named correctly.`);
+  throw new Error(`Could not load "${filename}" — file not found in Firebase or GitHub. Please upload via the Admin panel.`);
 }
 
 async function loadXLSX(filename) {
@@ -1051,6 +1094,7 @@ function loginAs(userId) {
     document.getElementById('active-user-badge').style.display = 'flex';
     document.getElementById('active-user-name').textContent = user.name;
     document.getElementById('header-user-dot').style.background = user.color;
+    document.getElementById('admin-btn').style.display = 'inline-block';
 
     // Hide login screen
     document.getElementById('login-screen').style.display = 'none';
@@ -2245,5 +2289,120 @@ function exportXLSX() {
 
 // loadAll() is called after login
 </script>
+<!-- Admin Overlay -->
+<div id="admin-overlay">
+  <div id="admin-box">
+    <h2>Admin File Upload</h2>
+    <div id="admin-login">
+      <p style="font-size:0.72rem;color:var(--muted);">Enter admin password to upload daily files</p>
+      <input type="password" id="admin-pwd" placeholder="Password..." onkeydown="if(event.key==='Enter')checkAdminPwd()"/>
+      <div id="admin-pwd-error" style="font-size:0.68rem;color:var(--accent);display:none;">Incorrect password</div>
+      <div class="admin-btn-row">
+        <button class="admin-action-btn" onclick="closeAdmin()" style="background:transparent;color:var(--muted);border:1px solid var(--border);">Cancel</button>
+        <button class="admin-action-btn" onclick="checkAdminPwd()" style="background:var(--accent2);color:white;border:none;">Sign In</button>
+      </div>
+    </div>
+    <div id="admin-panel" style="display:none;">
+      <p style="font-size:0.7rem;color:var(--muted);margin-bottom:1rem;">Upload new files to update the priority list for all users.</p>
+      <div class="admin-upload-zone" id="zone-powerbi"><input type="file" accept=".xlsx,.xls" onchange="handleAdminFile('powerbi',this)"/><div class="admin-upload-label">PowerBI Export</div><div class="admin-upload-status" id="status-powerbi-admin">Click to select .xlsx file</div></div>
+      <div class="admin-upload-zone" id="zone-backorder"><input type="file" accept=".csv,.xlsx,.xls" onchange="handleAdminFile('backorder',this)"/><div class="admin-upload-label">Back Order Report</div><div class="admin-upload-status" id="status-backorder-admin">Click to select .csv or .xlsx file</div></div>
+      <div class="admin-upload-zone" id="zone-gradings" style="opacity:0.6;"><input type="file" accept=".csv,.xlsx,.xls" onchange="handleAdminFile('gradings',this)"/><div class="admin-upload-label">Part Gradings <span style="font-weight:400;font-size:0.65rem;">(optional)</span></div><div class="admin-upload-status" id="status-gradings-admin">Click to select file (only if updated)</div></div>
+      <div id="admin-progress"><div id="admin-progress-fill"></div></div>
+      <div id="admin-upload-msg" style="font-size:0.68rem;color:var(--muted);margin-bottom:0.5rem;"></div>
+      <div class="admin-btn-row">
+        <button class="admin-action-btn" onclick="closeAdmin()" style="background:transparent;color:var(--muted);border:1px solid var(--border);">Cancel</button>
+        <button class="admin-action-btn" id="admin-upload-btn" onclick="uploadAdminFiles()" style="background:var(--green);color:white;border:none;" disabled>Upload Files</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ADMIN_PWD = 'Vista123@';
+let adminFiles = { powerbi: null, backorder: null, gradings: null };
+let adminLoggedIn = false;
+
+function openAdmin() {
+  document.getElementById('admin-overlay').classList.add('open');
+  document.getElementById('admin-pwd').value = '';
+  document.getElementById('admin-pwd-error').style.display = 'none';
+  document.getElementById('admin-login').style.display = adminLoggedIn ? 'none' : 'flex';
+  document.getElementById('admin-panel').style.display = adminLoggedIn ? 'block' : 'none';
+  if (!adminLoggedIn) setTimeout(() => document.getElementById('admin-pwd').focus(), 100);
+}
+function closeAdmin() {
+  document.getElementById('admin-overlay').classList.remove('open');
+  adminFiles = { powerbi: null, backorder: null, gradings: null };
+  ['powerbi','backorder','gradings'].forEach(k => {
+    document.getElementById('zone-'+k).classList.remove('loaded');
+    document.getElementById('status-'+k+'-admin').textContent = 'Click to select file';
+    document.getElementById('status-'+k+'-admin').className = 'admin-upload-status';
+  });
+  document.getElementById('admin-upload-btn').disabled = true;
+  document.getElementById('admin-progress').style.display = 'none';
+  document.getElementById('admin-progress-fill').style.width = '0%';
+  document.getElementById('admin-upload-msg').textContent = '';
+}
+function checkAdminPwd() {
+  if (document.getElementById('admin-pwd').value === ADMIN_PWD) {
+    adminLoggedIn = true;
+    document.getElementById('admin-login').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+  } else {
+    document.getElementById('admin-pwd-error').style.display = 'block';
+    document.getElementById('admin-pwd').value = '';
+    document.getElementById('admin-pwd').focus();
+  }
+}
+function handleAdminFile(key, input) {
+  const file = input.files[0];
+  if (!file) return;
+  adminFiles[key] = file;
+  document.getElementById('status-'+key+'-admin').textContent = '✓ ' + file.name;
+  document.getElementById('status-'+key+'-admin').className = 'admin-upload-status ok';
+  document.getElementById('zone-'+key).classList.add('loaded');
+  document.getElementById('admin-upload-btn').disabled = !(adminFiles.powerbi || adminFiles.backorder);
+}
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => resolve(e.target.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+async function uploadAdminFiles() {
+  const btn = document.getElementById('admin-upload-btn');
+  const msg = document.getElementById('admin-upload-msg');
+  const progress = document.getElementById('admin-progress');
+  const fill = document.getElementById('admin-progress-fill');
+  btn.disabled = true;
+  progress.style.display = 'block';
+  msg.style.color = 'var(--muted)';
+  const toUpload = ['powerbi','backorder','gradings'].filter(k => adminFiles[k]);
+  try {
+    for (let i = 0; i < toUpload.length; i++) {
+      const key = toUpload[i];
+      msg.textContent = 'Uploading ' + adminFiles[key].name + '...';
+      fill.style.width = ((i / toUpload.length) * 90) + '%';
+      const b64 = await fileToBase64(adminFiles[key]);
+      await db.ref('files/' + key).set({ data: b64, name: adminFiles[key].name, updatedAt: Date.now() });
+    }
+    fill.style.width = '100%';
+    msg.textContent = '✓ Uploaded! All users will see the updated list.';
+    msg.style.color = 'var(--green)';
+    db.ref('lastUpdated').set(Date.now());
+    btn.disabled = false;
+    setTimeout(() => { closeAdmin(); loadAll(); }, 2000);
+  } catch(err) {
+    msg.textContent = '⚠ Upload failed: ' + err.message;
+    msg.style.color = 'var(--accent)';
+    btn.disabled = false;
+    fill.style.width = '0%';
+  }
+}
+document.addEventListener('click', e => { if (e.target.id === 'admin-overlay') closeAdmin(); });
+</script>
+
 </body>
 </html>

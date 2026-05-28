@@ -1990,15 +1990,15 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
         const remDays = Math.max(0, Math.round(new Date(activeMonthFilter.slice(0,4), parseInt(activeMonthFilter.slice(5,7)), 0).getDate() * 22 / 30) - adjustedDays);
         statusTxt = remDays > 0 ? '+' + (remaining / remDays).toFixed(1) + '/day' : '∞'; statusColor = 'var(--accent)';
       }
-      inlineHTML += `<div style="margin-bottom:0.5rem;">
-        <div style="display:flex;justify-content:space-between;font-size:0.65rem;margin-bottom:3px;">
-          <span style="color:var(--muted);">${t.target}/day <span style="color:var(--green);">+£${t.bonus}</span></span>
-          <span style="color:${statusColor};font-weight:600;">${statusTxt}</span>
-        </div>
-        <div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">
-          <div style="height:100%;width:${pct.toFixed(1)}%;background:${t.id==='18'?'#f0c040':t.id==='21'?'#f0a040':'var(--green)'};border-radius:4px;transition:width 0.4s;"></div>
-        </div>
-      </div>`;
+      const barColor = t.id === '18' ? '#f0c040' : t.id === '21' ? '#f0a040' : '#2ecc71';
+      inlineHTML += '<div style="margin-bottom:0.5rem;">'
+        + '<div style="display:flex;justify-content:space-between;font-size:0.65rem;margin-bottom:3px;">'
+        + '<span style="color:var(--muted);">' + t.target + '/day <span style="color:var(--green);">+£' + t.bonus + '</span></span>'
+        + '<span style="color:' + statusColor + ';font-weight:600;">' + statusTxt + '</span>'
+        + '</div>'
+        + '<div style="height:8px;background:var(--surface2);border-radius:4px;overflow:hidden;">'
+        + '<div style="height:100%;width:' + pct.toFixed(1) + '%;background:' + barColor + ';border-radius:4px;transition:width 0.4s;"></div>'
+        + '</div></div>';
     });
     // Projection
     const commission2 = calcCommission(currentAvg);

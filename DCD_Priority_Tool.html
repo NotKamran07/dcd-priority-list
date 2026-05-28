@@ -2354,38 +2354,42 @@ function renderGradingsTab() {
   };
   const GRADE_VALUE_MAP = { A: 0.25, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
 
-  // Count by grade
   const counts = {};
-  gradingsData.forEach(r => { if (r.cls) counts[r.cls] = (counts[r.cls] || 0) + 1; });
-  const noGrade = gradingsData.filter(r => !r.cls).length;
+  gradingsData.forEach(function(r) { if (r.cls) counts[r.cls] = (counts[r.cls] || 0) + 1; });
+  const noGrade = gradingsData.filter(function(r) { return !r.cls; }).length;
   const total = gradingsData.length;
 
-  // Summary
   document.getElementById('gradings-summary').innerHTML =
     total + ' DCD parts' + (noGrade > 0 ? ' &nbsp;<span style="color:var(--accent);">(' + noGrade + ' parts not found in gradings)</span>' : '');
 
-  // Grade cards
   const cardsEl = document.getElementById('grade-cards');
   const gradeOrder = ['A', 'B', 'C', 'M', 'S', 'X'];
-  cardsEl.innerHTML = gradeOrder.map(g => {
+  let cardsHTML = '';
+  gradeOrder.forEach(function(g) {
     const c = GRADE_COLOURS[g] || { bg: '#eee', text: '#666', border: '#ccc' };
     const cnt = counts[g] || 0;
     const isActive = gradingsFilter === g;
-    return '<div class="grade-card' + (isActive ? ' active' : '') + '" style="--card-color:' + c.border + ';border-color:' + (isActive ? c.border : 'var(--border)') + ';" onclick="setGradingsFilter('' + g + '')">'
-      + '<div class="grade-card-letter" style="background:' + c.bg + ';color:' + c.text + ';">' + g + '</div>'
-      + '<span class="grade-card-count" style="color:var(--text);">' + cnt + '</span>'
-      + '<div class="grade-card-label">parts</div>'
-      + '<div class="grade-card-value" style="color:' + c.text + ';">£' + (GRADE_VALUE_MAP[g] || 0).toFixed(2) + ' each</div>'
-      + '</div>';
-  }).join('') + (noGrade > 0 ? '<div class="grade-card" style="--card-color:var(--muted);" onclick="setGradingsFilter('none')">'
-    + '<div class="grade-card-letter" style="background:var(--surface2);color:var(--muted);">?</div>'
-    + '<span class="grade-card-count">' + noGrade + '</span>'
-    + '<div class="grade-card-label">no grade</div>'
-    + '<div class="grade-card-value" style="color:var(--muted);">—</div>'
-    + '</div>' : '');
-
+    const bc = isActive ? c.border : 'var(--border)';
+    cardsHTML += '<div class="grade-card' + (isActive ? ' active' : '') + '" style="--card-color:' + c.border + ';border-color:' + bc + ';" onclick="setGradingsFilter(\'' + g + '\')">';
+    cardsHTML += '<div class="grade-card-letter" style="background:' + c.bg + ';color:' + c.text + ';">' + g + '</div>';
+    cardsHTML += '<span class="grade-card-count" style="color:var(--text);">' + cnt + '</span>';
+    cardsHTML += '<div class="grade-card-label">parts</div>';
+    cardsHTML += '<div class="grade-card-value" style="color:' + c.text + ';">£' + (GRADE_VALUE_MAP[g] || 0).toFixed(2) + ' each</div>';
+    cardsHTML += '</div>';
+  });
+  if (noGrade > 0) {
+    const isActive = gradingsFilter === 'none';
+    cardsHTML += '<div class="grade-card' + (isActive ? ' active' : '') + '" style="--card-color:var(--muted);border-color:' + (isActive ? 'var(--muted)' : 'var(--border)') + ';" onclick="setGradingsFilter(\'none\')">';
+    cardsHTML += '<div class="grade-card-letter" style="background:var(--surface2);color:var(--muted);">?</div>';
+    cardsHTML += '<span class="grade-card-count">' + noGrade + '</span>';
+    cardsHTML += '<div class="grade-card-label">no grade</div>';
+    cardsHTML += '<div class="grade-card-value" style="color:var(--muted);">—</div>';
+    cardsHTML += '</div>';
+  }
+  cardsEl.innerHTML = cardsHTML;
   renderGradingsTable();
 }
+
 
 function setGradingsFilter(grade) {
   gradingsFilter = gradingsFilter === grade ? 'all' : grade;

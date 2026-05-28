@@ -81,39 +81,6 @@
   .tab-btn.active .tab-count { background: var(--accent); color: white; }
   .tab-btn.tab-done.active { border-bottom-color: var(--green); }
   .tab-btn.tab-history.active { border-bottom-color: #a855f7; }
-  .tab-btn.tab-gradings.active { border-bottom-color: var(--accent2); }
-  .tab-btn.tab-gradings.active .tab-count { background: var(--accent2); }
-
-  /* Part Gradings tab */
-  #gradings-wrap { padding: 1.5rem 2.5rem 3rem; display: none; }
-  .grade-cards { display: flex; gap: 1rem; flex-wrap: wrap; margin-bottom: 1.5rem; }
-  .grade-card {
-    flex: 1; min-width: 100px; background: var(--surface);
-    border: 2px solid var(--border); border-radius: 8px;
-    padding: 1rem; text-align: center; cursor: pointer; transition: all 0.15s;
-  }
-  .grade-card:hover, .grade-card.active { border-color: var(--card-color); background: var(--surface2); }
-  .grade-card.active { box-shadow: 0 0 0 2px var(--card-color); }
-  .grade-card-letter {
-    display: inline-flex; align-items: center; justify-content: center;
-    width: 36px; height: 36px; border-radius: 8px; font-family: 'Syne', sans-serif;
-    font-weight: 800; font-size: 1rem; margin-bottom: 0.5rem;
-  }
-  .grade-card-count { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 1.5rem; display: block; }
-  .grade-card-label { font-size: 0.62rem; color: var(--muted); }
-  .grade-card-value { font-size: 0.65rem; font-weight: 600; margin-top: 2px; }
-
-  .gradings-search-row { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
-  #gradings-search { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; padding: 0.5rem 0.85rem; border-radius: 3px; flex: 1; min-width: 200px; outline: none; }
-  #gradings-search:focus { border-color: var(--muted); }
-  .gradings-table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
-  .gradings-table-header { padding: 0.75rem 1.2rem; border-bottom: 1px solid var(--border); font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.72rem; }
-  #gradings-table { width: 100%; border-collapse: collapse; font-size: 0.75rem; }
-  #gradings-table th { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); padding: 0.6rem 1.2rem; text-align: left; border-bottom: 1px solid var(--border); background: var(--surface2); }
-  #gradings-table td { padding: 0.5rem 1.2rem; border-bottom: 1px solid rgba(255,255,255,0.03); }
-  #gradings-table tr:last-child td { border-bottom: none; }
-  #gradings-table tr:hover td { background: var(--surface2); }
-  .grade-pill { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 6px; font-family: 'Syne', sans-serif; font-weight: 800; font-size: 0.75rem; }
   /* Target tracker */
   .target-tracker { margin-bottom: 1.5rem; }
   .target-tracker-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin-bottom: 0.75rem; }
@@ -522,7 +489,6 @@
   <button class="tab-btn active" onclick="switchTab('main', this)">Priority List <span class="tab-count" id="tab-count-main">0</span></button>
   <button class="tab-btn tab-done" onclick="switchTab('done', this)">Completed Today <span class="tab-count" id="tab-count-done">0</span></button>
   <button class="tab-btn tab-history" onclick="switchTab('history', this)">Total Parts Completed <span class="tab-count" id="tab-count-history">0</span></button>
-  <button class="tab-btn tab-gradings" onclick="switchTab('gradings', this)">Part Gradings</button>
 </div>
 
 <div id="actions-bar">
@@ -1282,8 +1248,7 @@ async function loadAll() {
     });
     const gradeMap = window.gradeMap;
 
-    window.pbiMap = {};
-    const pbiMap = window.pbiMap;
+    const pbiMap = {};
     pbiRows.forEach(r => {
       const id = (r['Part ID'] || '').toString().trim();
       if (!id || !DCD_PARTS.has(id)) return;
@@ -1892,12 +1857,12 @@ function buildMonthButtons() {
     if (date === '_meta') return;
     months.add(date.slice(0, 7));
   });
-  let btns = '<button class="month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '') + '" data-month="all" onclick="setMonthFilter(this.dataset.month, this)">All Time</button>';
+  let btns = '<button class="month-btn all-btn' + (activeMonthFilter === 'all' ? ' active' : '') + '" onclick="setMonthFilter(\'all\', this)">All Time</button>';
   [...months].sort().reverse().forEach(m => {
     const d = new Date(m + '-01');
     const label = d.toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
     const isActive = activeMonthFilter === m;
-    btns += '<button class="month-btn' + (isActive ? ' active' : '') + '" data-month="' + m + '" onclick="setMonthFilter(this.dataset.month, this)">' + label + '</button>';
+    btns += '<button class="month-btn' + (isActive ? ' active' : '') + '" onclick="setMonthFilter(\'' + m + '\', this)">' + label + '</button>';
   });
   bar.innerHTML = btns;
 }
@@ -2321,113 +2286,6 @@ function clearHistory() {
   if (confirm('Clear all history permanently? This cannot be undone.')) {
     HISTORY_REF.remove();
   }
-}
-
-// Gradings tab state
-let gradingsFilter = 'all';
-let gradingsData = []; // built from pbiMap + gradeMap after loadAll
-
-function buildGradingsData() {
-  gradingsData = [];
-  const GRADE_VALUE_MAP = { A: 0.25, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
-  const gm = window.gradeMap || {};
-  const pm = window.pbiMap || {};
-  DCD_PARTS.forEach(partId => {
-    const cls = (gm[partId] || '').toUpperCase();
-    const val = GRADE_VALUE_MAP[cls] || null;
-    const pbi = pm[partId];
-    const team = pbi ? (pbi.team || '') : '';
-    const stock = pbi ? (pbi.totalBad || 0) : 0;
-    gradingsData.push({ partId, cls, val, team, stock });
-  });
-}
-
-function renderGradingsTab() {
-  buildGradingsData();
-  const GRADE_COLOURS = {
-    A: { bg: '#fff8e6', text: '#b07800', border: '#e0a020' },
-    B: { bg: '#fff3e0', text: '#c07000', border: '#f0a040' },
-    C: { bg: '#fef9e0', text: '#a09000', border: '#d0c030' },
-    M: { bg: '#fce8e6', text: '#c03000', border: '#e06040' },
-    S: { bg: '#e8f5e9', text: '#2e7d32', border: '#4caf50' },
-    X: { bg: '#e8f5e9', text: '#1a5e20', border: '#1a7a3a' }
-  };
-  const GRADE_VALUE_MAP = { A: 0.25, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
-
-  const counts = {};
-  gradingsData.forEach(function(r) { if (r.cls) counts[r.cls] = (counts[r.cls] || 0) + 1; });
-  const noGrade = gradingsData.filter(function(r) { return !r.cls; }).length;
-  const total = gradingsData.length;
-
-  document.getElementById('gradings-summary').innerHTML =
-    total + ' DCD parts' + (noGrade > 0 ? ' &nbsp;<span style="color:var(--accent);">(' + noGrade + ' parts not found in gradings)</span>' : '');
-
-  const cardsEl = document.getElementById('grade-cards');
-  const gradeOrder = ['A', 'B', 'C', 'M', 'S', 'X'];
-  let cardsHTML = '';
-  gradeOrder.forEach(function(g) {
-    const c = GRADE_COLOURS[g] || { bg: '#eee', text: '#666', border: '#ccc' };
-    const cnt = counts[g] || 0;
-    const isActive = gradingsFilter === g;
-    const bc = isActive ? c.border : 'var(--border)';
-    cardsHTML += '<div class="grade-card' + (isActive ? ' active' : '') + '" style="--card-color:' + c.border + ';border-color:' + bc + ';" data-grade="' + g + '" onclick="setGradingsFilter(this.dataset.grade)">';
-    cardsHTML += '<div class="grade-card-letter" style="background:' + c.bg + ';color:' + c.text + ';">' + g + '</div>';
-    cardsHTML += '<span class="grade-card-count" style="color:var(--text);">' + cnt + '</span>';
-    cardsHTML += '<div class="grade-card-label">parts</div>';
-    cardsHTML += '<div class="grade-card-value" style="color:' + c.text + ';">£' + (GRADE_VALUE_MAP[g] || 0).toFixed(2) + ' each</div>';
-    cardsHTML += '</div>';
-  });
-  if (noGrade > 0) {
-    const isActive = gradingsFilter === 'none';
-    cardsHTML += '<div class="grade-card' + (isActive ? ' active' : '') + '" style="--card-color:var(--muted);border-color:' + (isActive ? 'var(--muted)' : 'var(--border)') + ';" data-grade="none" onclick="setGradingsFilter(this.dataset.grade)">';
-    cardsHTML += '<div class="grade-card-letter" style="background:var(--surface2);color:var(--muted);">?</div>';
-    cardsHTML += '<span class="grade-card-count">' + noGrade + '</span>';
-    cardsHTML += '<div class="grade-card-label">no grade</div>';
-    cardsHTML += '<div class="grade-card-value" style="color:var(--muted);">—</div>';
-    cardsHTML += '</div>';
-  }
-  cardsEl.innerHTML = cardsHTML;
-  renderGradingsTable();
-}
-
-
-function setGradingsFilter(grade) {
-  gradingsFilter = gradingsFilter === grade ? 'all' : grade;
-  renderGradingsTab();
-}
-
-function renderGradingsTable() {
-  const search = (document.getElementById('gradings-search').value || '').toLowerCase();
-  const GRADE_COLOURS = {
-    A: { bg: '#fff8e6', text: '#b07800' }, B: { bg: '#fff3e0', text: '#c07000' },
-    C: { bg: '#fef9e0', text: '#a09000' }, M: { bg: '#fce8e6', text: '#c03000' },
-    S: { bg: '#e8f5e9', text: '#2e7d32' }, X: { bg: '#e8f5e9', text: '#1a5e20' }
-  };
-  let rows = gradingsData.filter(r => {
-    if (gradingsFilter === 'none' && r.cls) return false;
-    if (gradingsFilter !== 'all' && gradingsFilter !== 'none' && r.cls !== gradingsFilter) return false;
-    if (search && !r.partId.toLowerCase().includes(search)) return false;
-    return true;
-  });
-
-  const headerLabel = gradingsFilter === 'all' ? 'All Parts' :
-    gradingsFilter === 'none' ? 'No Grade Assigned' : 'Class ' + gradingsFilter + ' Parts';
-  document.getElementById('gradings-table-header').textContent = rows.length + ' ' + headerLabel;
-
-  const tbody = document.getElementById('gradings-tbody');
-  tbody.innerHTML = '';
-  rows.forEach((r, i) => {
-    const bg = i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
-    const c = GRADE_COLOURS[r.cls] || { bg: 'var(--surface2)', text: 'var(--muted)' };
-    const tr = document.createElement('tr');
-    tr.style.background = bg;
-    tr.innerHTML = '<td style="font-weight:600;font-family:IBM Plex Mono,monospace;">' + r.partId + '</td>'
-      + '<td style="color:var(--muted);">' + (r.team || '—') + '</td>'
-      + '<td><div class="grade-pill" style="background:' + c.bg + ';color:' + c.text + ';">' + (r.cls || '?') + '</div></td>'
-      + '<td style="font-weight:600;">' + (r.val ? '£' + r.val.toFixed(2) : '—') + '</td>'
-      + '<td style="text-align:center;">' + (r.stock || '—') + '</td>';
-    tbody.appendChild(tr);
-  });
 }
 
 function switchTab(tab, btn) {

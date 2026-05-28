@@ -1978,7 +1978,7 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
   if (activeMonthFilter !== 'all' && trackerColEl) {
     // Build inline tracker HTML
     const isPastMonthInline = activeMonthFilter < TODAY.slice(0, 7);
-    let inlineHTML = '<div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.75rem;">Monthly Target</div>';
+    let inlineHTML = '<div style="font-family:Syne,sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.75rem;">Monthly Target</div>';
     targets.forEach(t => {
       const pct = Math.min(100, (currentAvg / t.target) * 100);
       let statusTxt = '', statusColor = 'var(--muted)';

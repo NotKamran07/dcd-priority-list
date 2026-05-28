@@ -643,6 +643,11 @@
       <span class="month-stat-value" id="ms-total" style="color:var(--green);font-size:1.2rem;">£0.00</span>
     </div>
   </div>
+  <!-- Grade breakdown -->
+  <div id="ms-grade-breakdown" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);display:none;">
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.6rem;">Repairs by Grade</div>
+    <div id="ms-grade-bars" style="display:flex;gap:0.6rem;flex-wrap:wrap;align-items:flex-end;"></div>
+  </div>
 
   <!-- Target Tracker -->
   <div class="target-tracker" id="target-tracker" style="display:none;">
@@ -1879,6 +1884,37 @@ function updateMonthSummary(filteredEntries, monthKey) {
   document.getElementById('ms-commission').textContent = commission.amount > 0 ? '+£' + commission.amount : '£0';
   document.getElementById('ms-commission').style.color = commission.amount > 0 ? 'var(--green)' : 'var(--muted)';
   document.getElementById('ms-total').textContent = '£' + (earned + commission.amount).toFixed(2);
+
+  // Grade breakdown
+  const gradeOrder = ['A', 'M', 'B', 'C', 'S', 'X'];
+  const gradeColors = { A: '#aaaaaa', M: '#888888', B: '#c8a000', C: '#c07000', S: '#c05000', X: '#c00000' };
+  const gradeValues = { A: 0.25, M: 0.10, B: 0.50, C: 0.75, S: 1.25, X: 3.00 };
+  const gradeCounts = {};
+  filteredEntries.forEach(e => {
+    const cls = (e.cls || '').toUpperCase();
+    if (!cls) return;
+    gradeCounts[cls] = (gradeCounts[cls] || 0) + (e.count || 0);
+  });
+
+  const breakdown = document.getElementById('ms-grade-breakdown');
+  const barsEl = document.getElementById('ms-grade-bars');
+  const hasGrades = Object.keys(gradeCounts).length > 0;
+  breakdown.style.display = hasGrades ? 'block' : 'none';
+
+  if (hasGrades) {
+    const maxCount = Math.max(...Object.values(gradeCounts));
+    barsEl.innerHTML = gradeOrder.filter(g => gradeCounts[g] > 0).map(g => {
+      const count = gradeCounts[g] || 0;
+      const barH = Math.max(20, Math.round((count / maxCount) * 80));
+      const gradeEarned = (count * (gradeValues[g] || 0)).toFixed(2);
+      return `<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:48px;">
+        <div style="font-size:0.65rem;color:var(--muted);">£${gradeEarned}</div>
+        <div style="font-size:0.75rem;font-weight:700;color:${gradeColors[g] || 'var(--muted)'};">${count}</div>
+        <div style="width:40px;height:${barH}px;background:${gradeColors[g] || '#888'};border-radius:3px 3px 0 0;opacity:0.85;"></div>
+        <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:0.8rem;color:${gradeColors[g] || 'var(--muted)'};">${g}</div>
+      </div>`;
+    }).join('');
+  }
 }
 
 function calcCommission(avgPerDay) {

@@ -612,6 +612,16 @@
       <span class="month-stat-value" id="ms-total" style="color:var(--green);font-size:1.2rem;">£0.00</span>
     </div>
   </div>
+  <!-- Grade breakdown + tracker -->
+  <div id="ms-grade-breakdown" style="margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border);display:none;">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;width:100%;">
+      <div style="flex:0 0 auto;">
+        <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.6rem;">Repairs by Grade</div>
+        <div id="ms-grade-bars" style="display:flex;gap:0.6rem;align-items:flex-end;"></div>
+      </div>
+      <div id="ms-tracker-col" style="display:none;width:264px;flex-shrink:0;margin-right:20%;"></div>
+    </div>
+  </div>
 
   <!-- Target Tracker -->
   <div class="target-tracker" id="target-tracker" style="display:none;">
@@ -1816,7 +1826,12 @@ function buildMonthButtons() {
 function updateMonthSummary(filteredEntries, monthKey, passedDays) {
   const card = document.getElementById('month-summary-card');
   if (!card) return;
-  if (monthKey === 'all' || filteredEntries.length === 0) { card.style.display = 'none'; return; }
+  if (monthKey === 'all' || filteredEntries.length === 0) {
+    card.style.display = 'none';
+    const bd = document.getElementById('ms-grade-breakdown');
+    if (bd) bd.style.display = 'none';
+    return;
+  }
   card.style.display = 'grid';
   const repairs = filteredEntries.reduce((s, e) => s + (e.count || 0), 0);
   const earned = filteredEntries.reduce((s, e) => s + (e.earned || 0), 0);
@@ -1837,6 +1852,41 @@ function updateMonthSummary(filteredEntries, monthKey, passedDays) {
   document.getElementById('ms-commission').textContent = commission.amount > 0 ? '+£' + commission.amount : '£0';
   document.getElementById('ms-commission').style.color = commission.amount > 0 ? 'var(--green)' : 'var(--muted)';
   document.getElementById('ms-total').textContent = '£' + (earned + commission.amount).toFixed(2);
+
+  // Grade breakdown
+  const gradeOrder = ['X', 'S', 'C', 'A', 'M', 'BER'];
+  const gradeColors = { X: '#1a7a3a', S: '#4caf50', C: '#f0d040', A: '#e0a020', M: '#e07020', BER: '#c00000' };
+  const gradeValues = { X: 3.00, S: 1.25, C: 0.75, A: 0.25, M: 0.10, BER: 0.10 };
+  const gradeCounts = {};
+  filteredEntries.forEach(function(e) {
+    const cls = (e.cls || '').toUpperCase();
+    if (cls) gradeCounts[cls] = (gradeCounts[cls] || 0) + (e.count || 0);
+  });
+  const berTotal = filteredEntries.reduce(function(s, e) { return s + (e.berCount || 0); }, 0);
+  if (berTotal > 0) gradeCounts['BER'] = berTotal;
+
+  const breakdown = document.getElementById('ms-grade-breakdown');
+  const barsEl = document.getElementById('ms-grade-bars');
+  if (!breakdown || !barsEl) return;
+  const hasGrades = Object.keys(gradeCounts).length > 0;
+  breakdown.style.display = hasGrades ? 'block' : 'none';
+  if (hasGrades) {
+    const maxCount = Math.max.apply(null, Object.values(gradeCounts));
+    let barsHTML = '';
+    gradeOrder.filter(function(g) { return gradeCounts[g] > 0; }).forEach(function(g) {
+      const count = gradeCounts[g];
+      const barH = Math.max(20, Math.round((count / maxCount) * 80));
+      const gradeEarned = (count * (gradeValues[g] || 0)).toFixed(2);
+      const color = gradeColors[g];
+      barsHTML += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:48px;">';
+      barsHTML += '<div style="font-size:0.65rem;color:var(--muted);">£' + gradeEarned + '</div>';
+      barsHTML += '<div style="font-size:0.75rem;font-weight:700;color:' + color + ';">' + count + '</div>';
+      barsHTML += '<div style="width:40px;height:' + barH + 'px;background:' + color + ';border-radius:3px 3px 0 0;opacity:0.85;"></div>';
+      barsHTML += '<div style="font-family:Syne,sans-serif;font-weight:800;font-size:0.75rem;color:' + color + ';">' + g + '</div>';
+      barsHTML += '</div>';
+    });
+    barsEl.innerHTML = barsHTML;
+  }
 }
 
 function calcCommission(avgPerDay) {

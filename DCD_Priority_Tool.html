@@ -135,8 +135,7 @@
   #actions-bar { display: none; padding: 1rem 2.5rem; border-bottom: 1px solid var(--border); gap: 1rem; align-items: center; flex-wrap: wrap; }
   #search-input { background: var(--surface); border: 1px solid var(--border); color: var(--text); font-family: 'IBM Plex Mono', monospace; font-size: 0.75rem; padding: 0.45rem 0.85rem; border-radius: 2px; width: 250px; outline: none; }
   #search-input:focus { border-color: var(--muted); }
-  #show-done-btn, #export-btn, #refresh-btn, #reset-btn { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.5rem 1.2rem; cursor: pointer; border-radius: 2px; transition: opacity 0.2s; }
-  #export-btn { background: transparent; color: var(--accent2); border: 1px solid var(--accent2); }
+  #show-done-btn, #refresh-btn, #reset-btn { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.75rem; letter-spacing: 0.05em; text-transform: uppercase; padding: 0.5rem 1.2rem; cursor: pointer; border-radius: 2px; transition: opacity 0.2s; }
   .print-btn { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.72rem; letter-spacing: 0.04em; text-transform: uppercase; padding: 0.5rem 1rem; cursor: pointer; border-radius: 2px; background: transparent; color: var(--muted); border: 1px solid var(--border); transition: all 0.15s; }
   .print-btn:hover { color: var(--text); border-color: var(--muted); }
   #export-btn:hover { opacity: 0.75; }
@@ -469,12 +468,16 @@
   </div>
   <button id="show-done-btn" onclick="toggleDone()">Hide Completed</button>
   <button id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
-  <button id="export-btn" onclick="exportXLSX()">Export to Excel</button>
   <button id="reset-btn" onclick="resetTicks()">Reset All Ticks</button>
 
-  <button class="print-btn" onclick="printList('all')">🖨 Print All</button>
-  <button class="print-btn" onclick="printList('RC DCD')">🖨 RC DCD</button>
-  <button class="print-btn" onclick="printList('RC MCD')">🖨 RC MCD</button>
+  <div id="print-dropdown-wrap" style="position:relative;display:inline-block;">
+    <button class="print-btn" onclick="togglePrintMenu(event)">🖨 Print ▾</button>
+    <div id="print-menu" style="display:none;position:absolute;top:calc(100% + 4px);left:0;background:var(--surface);border:1px solid var(--border);border-radius:4px;min-width:140px;z-index:200;box-shadow:0 4px 16px rgba(0,0,0,0.3);">
+      <div onclick="printList('all');closePrintMenu()" style="padding:0.5rem 0.9rem;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;cursor:pointer;color:var(--text);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">All Departments</div>
+      <div onclick="printList('RC DCD');closePrintMenu()" style="padding:0.5rem 0.9rem;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;cursor:pointer;color:var(--text);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">RC DCD</div>
+      <div onclick="printList('RC MCD');closePrintMenu()" style="padding:0.5rem 0.9rem;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;cursor:pointer;color:var(--text);" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">RC MCD</div>
+    </div>
+  </div>
   <span id="row-count"></span>
 </div>
 
@@ -525,6 +528,7 @@
       <span class="stat-value" id="earnings-ticks" style="color:var(--text);">0</span>
     </div>
   </div>
+  <div id="grade-filter-indicator" style="display:none;font-size:0.68rem;color:var(--accent2);margin-bottom:0.75rem;cursor:pointer;" onclick="filterByGrade(activeGradeFilter)">Filtering by Grade — click to clear</div>
   <div style="padding:0 0 1rem;">
     <button onclick="openModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);">+ Add Part</button>
   </div>
@@ -1415,6 +1419,17 @@ function renderTable() {
   }
 }
 
+function togglePrintMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('print-menu');
+  menu.style.display = menu.style.display === 'none' ? 'block' : 'none';
+}
+function closePrintMenu() {
+  document.getElementById('print-menu').style.display = 'none';
+}
+// Close print menu when clicking elsewhere
+document.addEventListener('click', () => closePrintMenu());
+
 function printList(dept) {
   // Set print header
   const deptLabel = dept === 'all' ? 'All Departments' : dept;
@@ -1803,9 +1818,11 @@ function addBerToHistory(date, key) {
 
 // Month filter state
 let activeMonthFilter = 'all';
+let activeGradeFilter = 'all'; // for history table grade filtering
 
 function setMonthFilter(month, btn) {
   activeMonthFilter = month;
+  activeGradeFilter = 'all'; // reset grade filter on month change
   document.querySelectorAll('.month-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   renderHistory();
@@ -1885,11 +1902,14 @@ function updateMonthSummary(filteredEntries, monthKey, passedDays) {
       const barH = Math.max(20, Math.round((count / maxCount) * 80));
       const gradeEarned = (count * (gradeValues[g] || 0)).toFixed(2);
       const color = gradeColors[g];
-      barsHTML += '<div style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:48px;">';
+      const isGradeActive = activeGradeFilter === g;
+      const barOpacity = activeGradeFilter === 'all' ? '0.85' : (isGradeActive ? '1' : '0.25');
+      const barOutline = isGradeActive ? ';outline:2px solid ' + color + ';outline-offset:2px;' : '';
+      barsHTML += '<div data-grade="' + g + '" onclick="filterByGrade(this.dataset.grade)" style="display:flex;flex-direction:column;align-items:center;gap:4px;min-width:48px;cursor:pointer;transition:opacity 0.2s;" title="Filter by grade ' + g + '">';
       barsHTML += '<div style="font-size:0.65rem;color:var(--muted);">£' + gradeEarned + '</div>';
       barsHTML += '<div style="font-size:0.75rem;font-weight:700;color:' + color + ';">' + count + '</div>';
-      barsHTML += '<div style="width:40px;height:' + barH + 'px;background:' + color + ';border-radius:3px 3px 0 0;opacity:0.85;"></div>';
-      barsHTML += '<div style="font-family:Syne,sans-serif;font-weight:800;font-size:0.75rem;color:' + color + ';">' + g + '</div>';
+      barsHTML += '<div style="width:40px;height:' + barH + 'px;background:' + color + ';border-radius:3px 3px 0 0;opacity:' + barOpacity + barOutline + '"></div>';
+      barsHTML += '<div style="font-family:Syne,sans-serif;font-weight:800;font-size:0.75rem;color:' + color + (isGradeActive ? ';text-decoration:underline' : '') + ';">' + g + '</div>';
       barsHTML += '</div>';
     });
     barsEl.innerHTML = barsHTML;
@@ -1997,6 +2017,11 @@ function getDateRowStyle(dateStr) {
   return 'color: var(--muted);';
 }
 
+function filterByGrade(grade) {
+  activeGradeFilter = (activeGradeFilter === grade) ? 'all' : grade;
+  renderHistory();
+}
+
 function renderHistory() {
   const tbody = document.getElementById('history-body');
   tbody.innerHTML = '';
@@ -2008,9 +2033,29 @@ function renderHistory() {
     const day = historyData[date];
     if (!day) return;
     Object.keys(day).forEach(key => {
-      allEntries.push({ date, ...day[key], isBerOnly: day[key].type === 'ber', _key: key });
+      const entry = day[key];
+      // Apply grade filter if active
+      if (activeGradeFilter !== 'all') {
+        if (activeGradeFilter === 'BER') {
+          if (!entry.berCount || entry.berCount === 0) return;
+        } else {
+          if ((entry.cls || '').toUpperCase() !== activeGradeFilter) return;
+        }
+      }
+      allEntries.push({ date, ...entry, isBerOnly: entry.type === 'ber', _key: key });
     });
   });
+
+  // Show grade filter indicator
+  const gradeFilterEl = document.getElementById('grade-filter-indicator');
+  if (gradeFilterEl) {
+    if (activeGradeFilter !== 'all') {
+      gradeFilterEl.textContent = 'Filtering by Grade ' + activeGradeFilter + ' — click bar again to clear';
+      gradeFilterEl.style.display = 'block';
+    } else {
+      gradeFilterEl.style.display = 'none';
+    }
+  }
 
 
   // Build month filter buttons

@@ -619,35 +619,34 @@
         <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);margin-bottom:0.6rem;">Repairs by Grade</div>
         <div id="ms-grade-bars" style="display:flex;gap:0.6rem;align-items:flex-end;"></div>
       </div>
-      <div id="ms-tracker-col" style="display:none;width:264px;flex-shrink:0;margin-right:20%;"></div>
+      <div id="target-tracker" class="target-tracker" style="display:none;width:300px;flex-shrink:0;">
+        <div class="target-tracker-title" style="font-size:0.75rem;">📈 Monthly Target Tracker</div>
+        <div class="target-bars">
+          <div class="target-bar-wrap">
+            <div class="target-bar-label" style="font-size:0.75rem;width:140px;">18/day → <span style="color:#f0c040;">+£25</span></div>
+            <div class="target-bar-track" style="height:12px;"><div class="target-bar-fill" id="bar-18" style="background:#f0c040;width:0%;height:100%;"></div></div>
+            <div class="target-bar-pct" id="pct-18" style="font-size:0.7rem;width:36px;">0%</div>
+            <div class="target-status" id="status-18" style="color:var(--muted);font-size:0.7rem;width:90px;">—</div>
+          </div>
+          <div class="target-bar-wrap">
+            <div class="target-bar-label" style="font-size:0.75rem;width:140px;">21/day → <span style="color:#f0a040;">+£50</span></div>
+            <div class="target-bar-track" style="height:12px;"><div class="target-bar-fill" id="bar-21" style="background:#f0a040;width:0%;height:100%;"></div></div>
+            <div class="target-bar-pct" id="pct-21" style="font-size:0.7rem;width:36px;">0%</div>
+            <div class="target-status" id="status-21" style="color:var(--muted);font-size:0.7rem;width:90px;">—</div>
+          </div>
+          <div class="target-bar-wrap">
+            <div class="target-bar-label" style="font-size:0.75rem;width:140px;">24/day → <span style="color:var(--green);">+£75</span></div>
+            <div class="target-bar-track" style="height:12px;"><div class="target-bar-fill" id="bar-24" style="background:var(--green);width:0%;height:100%;"></div></div>
+            <div class="target-bar-pct" id="pct-24" style="font-size:0.7rem;width:36px;">0%</div>
+            <div class="target-status" id="status-24" style="color:var(--muted);font-size:0.7rem;width:90px;">—</div>
+          </div>
+        </div>
+        <div id="target-projection" style="margin-top:0.75rem;font-size:0.7rem;color:var(--muted);line-height:1.8;"></div>
+      </div>
     </div>
   </div>
 
-  <!-- Target Tracker -->
-  <div class="target-tracker" id="target-tracker" style="display:none;">
-    <div class="target-tracker-title">📈 Monthly Avg Repair Target Tracker</div>
-    <div class="target-bars">
-      <div class="target-bar-wrap">
-        <div class="target-bar-label">18/day → <span style="color:#f0c040;">+£25</span></div>
-        <div class="target-bar-track"><div class="target-bar-fill" id="bar-18" style="background:#f0c040;width:0%;"></div></div>
-        <div class="target-bar-pct" id="pct-18">0%</div>
-        <div class="target-status" id="status-18" style="color:var(--muted);">—</div>
-      </div>
-      <div class="target-bar-wrap">
-        <div class="target-bar-label">21/day → <span style="color:#f0a040;">+£50</span></div>
-        <div class="target-bar-track"><div class="target-bar-fill" id="bar-21" style="background:#f0a040;width:0%;"></div></div>
-        <div class="target-bar-pct" id="pct-21">0%</div>
-        <div class="target-status" id="status-21" style="color:var(--muted);">—</div>
-      </div>
-      <div class="target-bar-wrap">
-        <div class="target-bar-label">24/day → <span style="color:var(--green);">+£75</span></div>
-        <div class="target-bar-track"><div class="target-bar-fill" id="bar-24" style="background:var(--green);width:0%;"></div></div>
-        <div class="target-bar-pct" id="pct-24">0%</div>
-        <div class="target-status" id="status-24" style="color:var(--muted);">—</div>
-      </div>
-    </div>
-    <div id="target-projection" style="margin-top:0.75rem;font-size:0.68rem;color:var(--muted);line-height:1.8;"></div>
-  </div>
+  
 
   <table style="width:100%;border-collapse:collapse;font-size:0.72rem;">
     <thead>
@@ -1905,6 +1904,9 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
     return;
   }
   tracker.style.display = 'block';
+  // Also ensure grade breakdown is visible
+  const bd = document.getElementById('ms-grade-breakdown');
+  if (bd) bd.style.display = 'block';
 
   const currentAvg = totalRepairs / adjustedDays;
   const targets = [

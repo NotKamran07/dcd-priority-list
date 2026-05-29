@@ -561,12 +561,14 @@
     <div class="stat"><span class="stat-label">All-Time Earned</span><span class="stat-value" id="hist-total-earned" style="color:var(--green);">£0.00</span></div>
     <div class="stat">
       <span class="stat-label">Days Worked</span>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
-        <button onclick="adjustDaysWorked(-0.5)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;width:24px;height:24px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;">−</button>
-        <span class="stat-value" id="hist-days-worked" style="color:var(--accent2);">0</span>
-        <button onclick="adjustDaysWorked(0.5)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;width:24px;height:24px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;">+</button>
+      <div style="display:flex;flex-direction:column;align-items:flex-start;gap:2px;margin-top:2px;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <button onclick="adjustDaysWorked(-0.5)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;width:24px;height:24px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;flex-shrink:0;">−</button>
+          <span class="stat-value" id="hist-days-worked" style="color:var(--accent2);">0</span>
+          <button onclick="adjustDaysWorked(0.5)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;width:24px;height:24px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;flex-shrink:0;">+</button>
+        </div>
+        <div id="days-adj-indicator" style="font-size:0.62rem;color:var(--accent);padding-left:2px;min-height:14px;"></div>
       </div>
-      <span style="font-size:0.58rem;color:var(--muted);">± 0.5 day increments</span>
     </div>
     <div class="stat"><span class="stat-label">Avg Repairs / Day</span><span class="stat-value" id="hist-avg-repairs" style="color:var(--text);">0</span></div>
     <button onclick="openModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.45rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--green);color:white;border:1px solid var(--green);">+ Add Part</button>
@@ -2108,7 +2110,14 @@ function renderHistory() {
     const diffVal = currentAdj % 1 === 0 ? currentAdj : currentAdj.toFixed(1);
     diffStr = ` <span style="font-size:0.7rem;color:${currentAdj > 0 ? 'var(--accent)' : 'var(--green)'};">(${sign}${diffVal})</span>`;
   }
-  document.getElementById('hist-days-worked').innerHTML = adjStr + diffStr;
+  document.getElementById('hist-days-worked').textContent = adjStr;
+  const adjInd = document.getElementById('days-adj-indicator');
+  if (adjInd) {
+    // Strip HTML tags for the indicator, just show (+0.5) or (-0.5)
+    const adjMatch = diffStr.match(/[+-][0-9.]+/);
+    adjInd.textContent = adjMatch ? adjMatch[0] + ' day adj.' : '';
+    adjInd.style.color = currentAdj > 0 ? 'var(--green)' : currentAdj < 0 ? 'var(--accent)' : '';
+  }
   document.getElementById('hist-avg-repairs').textContent = avgRepairs;
   updateMonthSummary(allEntries, activeMonthFilter, activeMonthFilter !== 'all' ? adjustedDays : undefined);
   updateTargetTracker(totalRepairs, adjustedDays);
@@ -2155,7 +2164,14 @@ function updateDaysDisplay(adjustedDays) {
     const diffVal = currentAdj % 1 === 0 ? currentAdj : currentAdj.toFixed(1);
     diffStr = ` <span style="font-size:0.7rem;color:${currentAdj > 0 ? 'var(--accent)' : 'var(--green)'};">(${sign}${diffVal})</span>`;
   }
-  document.getElementById('hist-days-worked').innerHTML = adjStr + diffStr;
+  document.getElementById('hist-days-worked').textContent = adjStr;
+  const adjInd = document.getElementById('days-adj-indicator');
+  if (adjInd) {
+    // Strip HTML tags for the indicator, just show (+0.5) or (-0.5)
+    const adjMatch = diffStr.match(/[+-][0-9.]+/);
+    adjInd.textContent = adjMatch ? adjMatch[0] + ' day adj.' : '';
+    adjInd.style.color = currentAdj > 0 ? 'var(--green)' : currentAdj < 0 ? 'var(--accent)' : '';
+  }
   const avg = adjustedDays > 0 ? (totalRepairs / adjustedDays).toFixed(1) : '0';
   document.getElementById('hist-avg-repairs').textContent = avg;
   updateTargetTracker(totalRepairs, adjustedDays);

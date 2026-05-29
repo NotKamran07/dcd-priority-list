@@ -675,6 +675,27 @@
     </thead>
     <tbody id="history-body"></tbody>
   </table>
+
+  <!-- Ungraded section -->
+  <div id="ungraded-section" style="display:none;margin-top:2rem;">
+    <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.5rem 0;border-top:1px solid var(--border);margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem;">
+      <span style="color:#6b6f82;">? Ungraded</span>
+      <span id="ungraded-count" style="background:#6b6f82;color:white;font-size:0.6rem;padding:1px 7px;border-radius:10px;"></span>
+      <span style="font-size:0.65rem;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;">— use Recalculate Values to assign grades after updating the grading file</span>
+    </div>
+    <table style="width:100%;border-collapse:collapse;font-size:0.72rem;opacity:0.7;">
+      <thead>
+        <tr style="background:var(--surface2);border-bottom:1px solid var(--border);">
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.5rem 0.8rem;text-align:left;">Date</th>
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.5rem 0.8rem;text-align:left;">Part ID</th>
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.5rem 0.8rem;text-align:center;">Repairs</th>
+          <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.5rem 0.8rem;text-align:center;">Earned</th>
+        </tr>
+      </thead>
+      <tbody id="ungraded-tbody"></tbody>
+    </table>
+  </div>
+
 </div><!-- end hist-history-section -->
 
 <!-- Import KPI Section -->
@@ -1878,9 +1899,9 @@ function updateMonthSummary(filteredEntries, monthKey, passedDays) {
   document.getElementById('ms-total').textContent = '£' + (earned + commission.amount).toFixed(2);
 
   // Grade breakdown
-  const gradeOrder = ['X', 'S', 'C', 'A', 'M', 'BER'];
-  const gradeColors = { X: '#1a7a3a', S: '#4caf50', C: '#f0d040', A: '#e0a020', M: '#e07020', BER: '#c00000' };
-  const gradeValues = { X: 3.00, S: 1.25, C: 0.75, A: 0.25, M: 0.10, BER: 0.10 };
+  const gradeOrder = ['X', 'S', 'C', 'B', 'A', 'M', 'BER'];
+  const gradeColors = { X: '#1a7a3a', S: '#4caf50', C: '#f0d040', B: '#b08800', A: '#e0a020', M: '#e07020', BER: '#c00000' };
+  const gradeValues = { X: 3.00, S: 1.25, C: 0.75, B: 0.50, A: 0.25, M: 0.10, BER: 0.10 };
   const gradeCounts = {};
   filteredEntries.forEach(function(e) {
     const cls = (e.cls || '').toUpperCase();
@@ -2166,6 +2187,46 @@ function renderHistory() {
   document.getElementById('hist-avg-repairs').textContent = avgRepairs;
   updateMonthSummary(allEntries, activeMonthFilter, activeMonthFilter !== 'all' ? adjustedDays : undefined);
   updateTargetTracker(totalRepairs, adjustedDays);
+
+  // Ungraded section — show parts with no grade, regardless of month/grade filter
+  const knownGradesSet = new Set(['X','S','C','B','A','M']);
+  const ungradedEntries = [];
+  Object.keys(historyData).sort().reverse().forEach(date => {
+    if (date === '_meta') return;
+    if (activeMonthFilter !== 'all' && !date.startsWith(activeMonthFilter)) return;
+    const day = historyData[date];
+    if (!day) return;
+    Object.keys(day).forEach(key => {
+      const e = day[key];
+      const cls = (e.cls || '').toUpperCase();
+      if (!cls || !knownGradesSet.has(cls)) {
+        if ((e.count || 0) > 0) ungradedEntries.push({ date, ...e, _key: key });
+      }
+    });
+  });
+
+  const ungradedSection = document.getElementById('ungraded-section');
+  const ungradedTbody = document.getElementById('ungraded-tbody');
+  if (ungradedSection && ungradedTbody) {
+    if (ungradedEntries.length > 0 && activeGradeFilter === 'all') {
+      ungradedSection.style.display = 'block';
+      document.getElementById('ungraded-count').textContent = ungradedEntries.length + ' parts';
+      ungradedTbody.innerHTML = '';
+      ungradedEntries.forEach((e, i) => {
+        const bg = i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
+        const d = new Date(e.date + 'T12:00:00');
+        const dateLabel = d.toLocaleDateString('en-GB', { weekday:'short', day:'numeric', month:'short', year:'numeric' });
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td style="padding:0.4rem 0.8rem;background:' + bg + ';font-size:0.7rem;color:var(--muted);">' + dateLabel + '</td>'
+          + '<td style="padding:0.4rem 0.8rem;background:' + bg + ';font-weight:600;">' + (e.partId || '') + '</td>'
+          + '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;color:var(--green);font-weight:700;">' + (e.count || 0) + '</td>'
+          + '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;color:var(--muted);">—</td>';
+        ungradedTbody.appendChild(tr);
+      });
+    } else {
+      ungradedSection.style.display = 'none';
+    }
+  }
 }
 
 // Days worked manual adjustment (persisted in Firebase)

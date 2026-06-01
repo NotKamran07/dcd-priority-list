@@ -2501,7 +2501,8 @@ function exportXLSX() {
 <script>
 const ADMIN_PWD = 'Vista123@';
 let adminFiles = { powerbi: null, backorder: null, gradings: null };
-let adminLoggedIn = false;
+// Persist login state in sessionStorage (survives page refresh, cleared when tab closes)
+let adminLoggedIn = sessionStorage.getItem('adminLoggedIn') === 'true';
 
 function openAdmin() {
   document.getElementById('admin-overlay').classList.add('open');
@@ -2527,6 +2528,7 @@ function closeAdmin() {
 function checkAdminPwd() {
   if (document.getElementById('admin-pwd').value === ADMIN_PWD) {
     adminLoggedIn = true;
+    sessionStorage.setItem('adminLoggedIn', 'true');
     document.getElementById('admin-login').style.display = 'none';
     document.getElementById('admin-panel').style.display = 'block';
   } else {
@@ -2576,7 +2578,8 @@ async function uploadAdminFiles() {
     btn.disabled = false;
     setTimeout(() => { closeAdmin(); loadAll(); }, 2000);
   } catch(err) {
-    msg.textContent = '⚠ Upload failed: ' + err.message;
+    console.error('Upload error:', err);
+    msg.textContent = '⚠ Upload failed: ' + (err.message || 'Unknown error. Check your connection and try again.');
     msg.style.color = 'var(--accent)';
     btn.disabled = false;
     fill.style.width = '0%';

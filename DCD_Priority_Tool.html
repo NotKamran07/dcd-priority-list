@@ -836,8 +836,11 @@ function getTickCount(partId) {
   const tick = ticks[key];
   if (!tick) return 0;
   if (typeof tick === 'object') {
-    // Only count ticks that happened after the last file upload
-    if (filesUploadedAt > 0 && tick.lastUpdated && tick.lastUpdated < filesUploadedAt) return 0;
+    // If filesUploadedAt is set, only count ticks that happened AFTER the upload
+    // Ticks with no lastUpdated timestamp are treated as pre-upload (ignored for qty)
+    if (filesUploadedAt > 0) {
+      if (!tick.lastUpdated || tick.lastUpdated <= filesUploadedAt) return 0;
+    }
     return tick.count || 0;
   }
   return tick ? 1 : 0;
@@ -848,8 +851,11 @@ function getBerCount(partId) {
   const ber = bers[key];
   if (!ber) return 0;
   if (typeof ber === 'object') {
-    // Only count BERs that happened after the last file upload
-    if (filesUploadedAt > 0 && ber.lastUpdated && ber.lastUpdated < filesUploadedAt) return 0;
+    // If filesUploadedAt is set, only count BERs that happened AFTER the upload
+    // BERs with no lastUpdated timestamp are treated as pre-upload (ignored for qty)
+    if (filesUploadedAt > 0) {
+      if (!ber.lastUpdated || ber.lastUpdated <= filesUploadedAt) return 0;
+    }
     return ber.count || 0;
   }
   return 0;
@@ -2593,6 +2599,22 @@ async function uploadAdminFiles() {
     db.ref('lastUpdated').set(uploadTs);
     // Store upload timestamp so ticks/BERs before this are ignored for qty calculation
     db.ref('filesUploadedAt').set(uploadTs);
+    // Reset all users' tick and BER timestamps to mark them as pre-upload
+    // This ensures old work doesn't subtract from the fresh stock figures
+    Object.keys(USERS).forEach(userId => {
+      db.ref('users/' + userId + '/ticks/' + TODAY).once('value').then(snap => {
+        const userTicks = snap.val() || {};
+        Object.keys(userTicks).forEach(key => {
+          db.ref('users/' + userId + '/ticks/' + TODAY + '/' + key + '/lastUpdated').set(0);
+        });
+      });
+      db.ref('users/' + userId + '/ber/' + TODAY).once('value').then(snap => {
+        const userBers = snap.val() || {};
+        Object.keys(userBers).forEach(key => {
+          db.ref('users/' + userId + '/ber/' + TODAY + '/' + key + '/lastUpdated').set(0);
+        });
+      });
+    });
     btn.disabled = false;
     // Reset file inputs immediately after upload so new files can be selected without refreshing
     ['powerbi','backorder','gradings'].forEach(k => {

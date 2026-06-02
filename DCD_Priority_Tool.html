@@ -1250,7 +1250,8 @@ async function loadAll() {
       if (!boMap[id]) boMap[id] = { count: 0, totalQty: 0 };
       boMap[id].count++;
       const qty = Number(r['Qty']) || 0;
-      boMap[id].totalQty += qty;
+      // Use MAX qty not SUM - all calls share the same stock pool
+      if (qty > boMap[id].totalQty) boMap[id].totalQty = qty;
       if (qty === 0) boZeroQtyParts.add(id); // flag parts with 0 qty
     });
 

@@ -2519,6 +2519,9 @@ function closeAdmin() {
     document.getElementById('zone-'+k).classList.remove('loaded');
     document.getElementById('status-'+k+'-admin').textContent = 'Click to select file';
     document.getElementById('status-'+k+'-admin').className = 'admin-upload-status';
+    // Reset the actual file input so the same file can be re-selected
+    const input = document.querySelector('#zone-'+k+' input[type=file]');
+    if (input) input.value = '';
   });
   document.getElementById('admin-upload-btn').disabled = true;
   document.getElementById('admin-progress').style.display = 'none';
@@ -2576,6 +2579,11 @@ async function uploadAdminFiles() {
     msg.style.color = 'var(--green)';
     db.ref('lastUpdated').set(Date.now());
     btn.disabled = false;
+    // Reset file inputs immediately after upload so new files can be selected without refreshing
+    ['powerbi','backorder','gradings'].forEach(k => {
+      const input = document.querySelector('#zone-'+k+' input[type=file]');
+      if (input) input.value = '';
+    });
     setTimeout(() => { closeAdmin(); loadAll(); }, 2000);
   } catch(err) {
     console.error('Upload error:', err);

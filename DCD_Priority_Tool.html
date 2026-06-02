@@ -1260,13 +1260,15 @@ async function loadAll() {
     Object.keys(boMap).forEach(id => {
       const bo = boMap[id], pbi = pbiMap[id] || { repReq: 0, totalBad: 0, team: '' };
       const cls = gradeMap[id] || '';
-      // If backorder report explicitly shows qty=0, force 0 regardless of PowerBI
-      // Otherwise use PowerBI Total Bad as it's more accurate
+      // Prioritise backorder report quantity over PowerBI
+      // Backorder qty is more accurate for parts currently on call
       let totalQty;
       if (boZeroQtyParts.has(id)) {
-        totalQty = 0; // backorder says 0 — trust the backorder report
+        totalQty = 0; // backorder says 0 — force 0
+      } else if (bo.totalQty > 0) {
+        totalQty = bo.totalQty; // use backorder qty first
       } else {
-        totalQty = pbi.totalBad > 0 ? pbi.totalBad : bo.totalQty;
+        totalQty = pbi.totalBad || 0; // fall back to PowerBI if backorder has no qty
       }
       rank1.push({ Priority: 1, 'Part ID': id, 'Repair Team': pbi.team, 'Rep Req': pbi.repReq, 'Open Orders': bo.count, 'Total Qty': totalQty, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
     });

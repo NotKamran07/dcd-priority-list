@@ -797,6 +797,7 @@ const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG5
 
 let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, bers = {}, showDone = true, deptFilter = 'all', currentTab = 'main';
 let currentUser = null;
+let filesUploadedAt = 0; // timestamp of last file upload
 let dataLoaded = false;
 let allUserTicks = {}; // all users' ticks for live view
 const USERS = {
@@ -834,7 +835,11 @@ function getTickCount(partId) {
   const key = safeKey(partId);
   const tick = ticks[key];
   if (!tick) return 0;
-  if (typeof tick === 'object') return tick.count || 0;
+  if (typeof tick === 'object') {
+    // Only count ticks that happened after the last file upload
+    if (filesUploadedAt > 0 && tick.lastUpdated && tick.lastUpdated < filesUploadedAt) return 0;
+    return tick.count || 0;
+  }
   return tick ? 1 : 0;
 }
 
@@ -842,7 +847,11 @@ function getBerCount(partId) {
   const key = safeKey(partId);
   const ber = bers[key];
   if (!ber) return 0;
-  if (typeof ber === 'object') return ber.count || 0;
+  if (typeof ber === 'object') {
+    // Only count BERs that happened after the last file upload
+    if (filesUploadedAt > 0 && ber.lastUpdated && ber.lastUpdated < filesUploadedAt) return 0;
+    return ber.count || 0;
+  }
   return 0;
 }
 
@@ -853,9 +862,8 @@ function addBer(partId) {
   const origQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
   const currentBer = getBerCount(partId);
   const currentTick = getTickCount(partId);
-  // Can't BER more than available stock
   if (currentBer + currentTick >= origQty) return;
-  BER_REF.child(key).set({ count: currentBer + 1 });
+  BER_REF.child(key).set({ count: currentBer + 1, lastUpdated: Date.now() });
 }
 
 function removeBer(partId) {
@@ -893,7 +901,8 @@ function getEffectiveRow(row) {
   // Open Orders and Rep Req subtract ALL users' ticks combined
   const newOpenOrders = row.Priority === 1 ? Math.max(0, origOpenOrders - allTickCount) : origOpenOrders;
   const newRepReq = Math.max(0, origRepReq - allTickCount);
-  // Total Qty subtracts all ticks + BERs
+
+  // Subtract both ticks and BERs from Total Qty for all priorities
   const newTotalQty = Math.max(0, origTotalQty - allTickCount - berCount);
 
   // Special case: if rep req and total qty are equal (1:1), BER also reduces rep req and open orders
@@ -2580,7 +2589,10 @@ async function uploadAdminFiles() {
     fill.style.width = '100%';
     msg.textContent = '✓ Uploaded! All users will see the updated list.';
     msg.style.color = 'var(--green)';
-    db.ref('lastUpdated').set(Date.now());
+    const uploadTs = Date.now();
+    db.ref('lastUpdated').set(uploadTs);
+    // Store upload timestamp so ticks/BERs before this are ignored for qty calculation
+    db.ref('filesUploadedAt').set(uploadTs);
     btn.disabled = false;
     // Reset file inputs immediately after upload so new files can be selected without refreshing
     ['powerbi','backorder','gradings'].forEach(k => {

@@ -361,24 +361,6 @@
   .admin-action-btn { font-family:'Syne',sans-serif; font-weight:700; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; padding:0.5rem 1.2rem; cursor:pointer; border-radius:3px; transition:opacity 0.2s; }
   .admin-action-btn:hover { opacity:0.8; }
 
-  /* Backorder Notes Modal */
-  #notes-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:4000; align-items:center; justify-content:center; }
-  #notes-overlay.open { display:flex; }
-  #notes-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1.5rem; width:600px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; }
-  #notes-box h2 { font-family:'Syne',sans-serif; font-weight:800; font-size:1rem; margin-bottom:0.25rem; }
-  #notes-box p { font-size:0.7rem; color:var(--muted); margin-bottom:1rem; }
-  #notes-list { overflow-y:auto; flex:1; border:1px solid var(--border); border-radius:4px; }
-  .note-row { display:flex; align-items:center; gap:0.75rem; padding:0.6rem 0.9rem; border-bottom:1px solid var(--border); }
-  .note-row:last-child { border-bottom:none; }
-  .note-row:hover { background:var(--surface2); }
-  .note-partid { font-family:'IBM Plex Mono',monospace; font-size:0.72rem; font-weight:600; flex:1; }
-  .note-text { font-size:0.7rem; color:var(--muted); flex:1.5; }
-  .note-toggle { font-family:'Syne',sans-serif; font-weight:700; font-size:0.65rem; text-transform:uppercase; padding:3px 10px; border-radius:3px; cursor:pointer; border:1px solid; transition:all 0.15s; white-space:nowrap; }
-  .note-toggle.keep { background:transparent; color:var(--green); border-color:var(--green); }
-  .note-toggle.remove { background:var(--accent); color:white; border-color:var(--accent); }
-  #notes-footer { display:flex; justify-content:space-between; align-items:center; margin-top:1rem; flex-shrink:0; }
-  #notes-summary { font-size:0.7rem; color:var(--muted); }
-
   @media print {
     @page { size: A4 landscape; margin: 0.3cm; }
     * { box-sizing: border-box; }
@@ -815,7 +797,6 @@ const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG5
 
 let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, bers = {}, showDone = true, deptFilter = 'all', currentTab = 'main';
 let currentUser = null;
-let filesUploadedAt = 0; // timestamp of last file upload
 let dataLoaded = false;
 let allUserTicks = {}; // all users' ticks for live view
 const USERS = {
@@ -853,14 +834,7 @@ function getTickCount(partId) {
   const key = safeKey(partId);
   const tick = ticks[key];
   if (!tick) return 0;
-  if (typeof tick === 'object') {
-    // If filesUploadedAt is set, only count ticks that happened AFTER the upload
-    // Ticks with no lastUpdated timestamp are treated as pre-upload (ignored for qty)
-    if (filesUploadedAt > 0) {
-      if (!tick.lastUpdated || tick.lastUpdated <= filesUploadedAt) return 0;
-    }
-    return tick.count || 0;
-  }
+  if (typeof tick === 'object') return tick.count || 0;
   return tick ? 1 : 0;
 }
 
@@ -868,14 +842,7 @@ function getBerCount(partId) {
   const key = safeKey(partId);
   const ber = bers[key];
   if (!ber) return 0;
-  if (typeof ber === 'object') {
-    // If filesUploadedAt is set, only count BERs that happened AFTER the upload
-    // BERs with no lastUpdated timestamp are treated as pre-upload (ignored for qty)
-    if (filesUploadedAt > 0) {
-      if (!ber.lastUpdated || ber.lastUpdated <= filesUploadedAt) return 0;
-    }
-    return ber.count || 0;
-  }
+  if (typeof ber === 'object') return ber.count || 0;
   return 0;
 }
 
@@ -886,8 +853,9 @@ function addBer(partId) {
   const origQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
   const currentBer = getBerCount(partId);
   const currentTick = getTickCount(partId);
+  // Can't BER more than available stock
   if (currentBer + currentTick >= origQty) return;
-  BER_REF.child(key).set({ count: currentBer + 1, lastUpdated: Date.now() });
+  BER_REF.child(key).set({ count: currentBer + 1 });
 }
 
 function removeBer(partId) {
@@ -925,8 +893,7 @@ function getEffectiveRow(row) {
   // Open Orders and Rep Req subtract ALL users' ticks combined
   const newOpenOrders = row.Priority === 1 ? Math.max(0, origOpenOrders - allTickCount) : origOpenOrders;
   const newRepReq = Math.max(0, origRepReq - allTickCount);
-
-  // Subtract both ticks and BERs from Total Qty for all priorities
+  // Total Qty subtracts all ticks + BERs
   const newTotalQty = Math.max(0, origTotalQty - allTickCount - berCount);
 
   // Special case: if rep req and total qty are equal (1:1), BER also reduces rep req and open orders
@@ -1285,26 +1252,47 @@ async function loadAll() {
       if (!boMap[id]) boMap[id] = { count: 0, totalQty: 0 };
       boMap[id].count++;
       const qty = Number(r['Qty']) || 0;
-      // Use MAX qty not SUM - all calls share the same stock pool
-      if (qty > boMap[id].totalQty) boMap[id].totalQty = qty;
+      boMap[id].totalQty += qty;
       if (qty === 0) boZeroQtyParts.add(id); // flag parts with 0 qty
+    });
+
+    // Exclude parts where ALL backorder rows have notes matching excluded keywords
+    const EXCLUDED_KEYWORDS = ['done', 'completed', 'in progress'];
+    const excludedByNote = new Set();
+    // Group notes by partId
+    const partNotes = {};
+    boRows.forEach(r => {
+      const partId = r['Part ID'];
+      const note = (r['Note'] || '').toLowerCase().trim();
+      if (!partId) return;
+      if (!partNotes[partId]) partNotes[partId] = { total: 0, excluded: 0 };
+      partNotes[partId].total++;
+      if (note && EXCLUDED_KEYWORDS.some(kw => note.includes(kw))) {
+        partNotes[partId].excluded++;
+      }
+    });
+    // Only exclude if ALL rows for this part have excluded notes
+    Object.keys(partNotes).forEach(partId => {
+      const p = partNotes[partId];
+      if (p.total > 0 && p.excluded === p.total) {
+        excludedByNote.add(partId);
+      }
     });
 
     const boIds = new Set(Object.keys(boMap));
     const rank1 = [], rank2 = [];
 
     Object.keys(boMap).forEach(id => {
+      if (excludedByNote.has(id)) return; // skip parts excluded by note keywords
       const bo = boMap[id], pbi = pbiMap[id] || { repReq: 0, totalBad: 0, team: '' };
       const cls = gradeMap[id] || '';
-      // Prioritise backorder report quantity over PowerBI
-      // Backorder qty is more accurate for parts currently on call
+      // If backorder report explicitly shows qty=0, force 0 regardless of PowerBI
+      // Otherwise use PowerBI Total Bad as it's more accurate
       let totalQty;
       if (boZeroQtyParts.has(id)) {
-        totalQty = 0; // backorder says 0 — force 0
-      } else if (bo.totalQty > 0) {
-        totalQty = bo.totalQty; // use backorder qty first
+        totalQty = 0; // backorder says 0 — trust the backorder report
       } else {
-        totalQty = pbi.totalBad || 0; // fall back to PowerBI if backorder has no qty
+        totalQty = pbi.totalBad > 0 ? pbi.totalBad : bo.totalQty;
       }
       rank1.push({ Priority: 1, 'Part ID': id, 'Repair Team': pbi.team, 'Rep Req': pbi.repReq, 'Open Orders': bo.count, 'Total Qty': totalQty, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
     });
@@ -2506,116 +2494,8 @@ function exportXLSX() {
   XLSX.writeFile(wb, `DCD_Priority_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
-// Parts excluded from priority list via notes modal
-let excludedParts = new Set(); // set of partIds excluded
-let excludedRequestIds = new Set(); // set of request_ids that have been excluded
-let pendingNotesData = []; // parts with notes waiting for user decision
-
-// Load saved excluded request IDs from Firebase
-function loadExcludedRequestIds() {
-  if (!currentUser) return;
-  db.ref('excludedNotes/' + currentUser).once('value').then(snap => {
-    const data = snap.val();
-    if (data) Object.keys(data).forEach(id => excludedRequestIds.add(id));
-  });
-}
-
-function showNotesModal(partsWithNotes) {
-  if (partsWithNotes.length === 0) return;
-  pendingNotesData = partsWithNotes;
-  const list = document.getElementById('notes-list');
-  list.innerHTML = '';
-  partsWithNotes.forEach(item => {
-    const isExcluded = excludedParts.has(item.partId);
-    const newCount = item.requestIds ? item.requestIds.filter(id => !excludedRequestIds.has(id)).length : 0;
-    const div = document.createElement('div');
-    div.className = 'note-row';
-    div.dataset.partid = item.partId;
-    div.dataset.partid = item.partId;
-    div.innerHTML = '<div class="note-partid">' + item.partId
-      + (newCount > 0 ? ' <span style="font-size:0.6rem;background:var(--accent2);color:white;padding:1px 5px;border-radius:3px;">' + newCount + ' new</span>' : '') + '</div>'
-      + '<div class="note-text">' + (item.note || '') + '</div>'
-      + '<button class="note-toggle ' + (isExcluded ? 'remove' : 'keep') + '" data-partid="' + item.partId + '" onclick="toggleNoteRow(this, this.dataset.partid)">'
-      + (isExcluded ? 'Excluded' : 'Keep') + '</button>';
-    list.appendChild(div);
-  });
-  updateNotesSummary();
-  document.getElementById('notes-overlay').classList.add('open');
-}
-
-function toggleNoteRow(btn, partId) {
-  if (excludedParts.has(partId)) {
-    excludedParts.delete(partId);
-    btn.className = 'note-toggle keep';
-    btn.textContent = 'Keep';
-  } else {
-    excludedParts.add(partId);
-    btn.className = 'note-toggle remove';
-    btn.textContent = 'Excluded';
-  }
-  updateNotesSummary();
-}
-
-function notesSelectAll(keep) {
-  pendingNotesData.forEach(item => {
-    if (keep) excludedParts.delete(item.partId);
-    else excludedParts.add(item.partId);
-  });
-  // Re-render rows
-  document.querySelectorAll('.note-row').forEach(row => {
-    const partId = row.dataset.partid;
-    const btn = row.querySelector('.note-toggle');
-    const isExcluded = excludedParts.has(partId);
-    btn.className = 'note-toggle ' + (isExcluded ? 'remove' : 'keep');
-    btn.textContent = isExcluded ? 'Excluded' : 'Keep';
-  });
-  updateNotesSummary();
-}
-
-function updateNotesSummary() {
-  const total = pendingNotesData.length;
-  const excluded = excludedParts.size;
-  document.getElementById('notes-summary').textContent = excluded + ' excluded, ' + (total - excluded) + ' kept';
-}
-
-function confirmNotes() {
-  document.getElementById('notes-overlay').classList.remove('open');
-  // Save excluded request_ids to Firebase so they're remembered next upload
-  if (currentUser) {
-    pendingNotesData.forEach(item => {
-      if (excludedParts.has(item.partId) && item.requestIds) {
-        // Only save request_ids that have notes (already filtered in notesByPart)
-        item.requestIds.forEach(id => {
-          excludedRequestIds.add(id);
-          db.ref('excludedNotes/' + currentUser + '/' + id).set(true);
-        });
-      }
-    });
-  }
-  // Re-filter outputRows to remove excluded parts
-  outputRows = outputRows.filter(r => !excludedParts.has(r['Part ID']));
-  renderTable();
-}
-
 // loadAll() is called after login
 </script>
-<!-- Backorder Notes Modal -->
-<div id="notes-overlay">
-  <div id="notes-box">
-    <h2>⚠ Parts with Notes</h2>
-    <p>These parts have notes in the backorder report. Choose which to keep or remove from the priority list.</p>
-    <div id="notes-list"></div>
-    <div id="notes-footer">
-      <div id="notes-summary"></div>
-      <div style="display:flex;gap:0.75rem;">
-        <button onclick="notesSelectAll(false)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;padding:4px 10px;cursor:pointer;border-radius:3px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Remove All</button>
-        <button onclick="notesSelectAll(true)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;padding:4px 10px;cursor:pointer;border-radius:3px;background:transparent;color:var(--green);border:1px solid var(--green);">Keep All</button>
-        <button onclick="confirmNotes()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;padding:4px 12px;cursor:pointer;border-radius:3px;background:var(--accent2);color:white;border:none;">Apply & Continue</button>
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- Admin Overlay -->
 <div id="admin-overlay">
   <div id="admin-box">
@@ -2647,8 +2527,7 @@ function confirmNotes() {
 <script>
 const ADMIN_PWD = 'Vista123@';
 let adminFiles = { powerbi: null, backorder: null, gradings: null };
-// Persist login state in sessionStorage (survives page refresh, cleared when tab closes)
-let adminLoggedIn = sessionStorage.getItem('adminLoggedIn') === 'true';
+let adminLoggedIn = false;
 
 function openAdmin() {
   document.getElementById('admin-overlay').classList.add('open');
@@ -2665,9 +2544,6 @@ function closeAdmin() {
     document.getElementById('zone-'+k).classList.remove('loaded');
     document.getElementById('status-'+k+'-admin').textContent = 'Click to select file';
     document.getElementById('status-'+k+'-admin').className = 'admin-upload-status';
-    // Reset the actual file input so the same file can be re-selected
-    const input = document.querySelector('#zone-'+k+' input[type=file]');
-    if (input) input.value = '';
   });
   document.getElementById('admin-upload-btn').disabled = true;
   document.getElementById('admin-progress').style.display = 'none';
@@ -2677,7 +2553,6 @@ function closeAdmin() {
 function checkAdminPwd() {
   if (document.getElementById('admin-pwd').value === ADMIN_PWD) {
     adminLoggedIn = true;
-    sessionStorage.setItem('adminLoggedIn', 'true');
     document.getElementById('admin-login').style.display = 'none';
     document.getElementById('admin-panel').style.display = 'block';
   } else {
@@ -2723,36 +2598,11 @@ async function uploadAdminFiles() {
     fill.style.width = '100%';
     msg.textContent = '✓ Uploaded! All users will see the updated list.';
     msg.style.color = 'var(--green)';
-    const uploadTs = Date.now();
-    db.ref('lastUpdated').set(uploadTs);
-    // Store upload timestamp so ticks/BERs before this are ignored for qty calculation
-    db.ref('filesUploadedAt').set(uploadTs);
-    // Reset all users' tick and BER timestamps to mark them as pre-upload
-    // This ensures old work doesn't subtract from the fresh stock figures
-    Object.keys(USERS).forEach(userId => {
-      db.ref('users/' + userId + '/ticks/' + TODAY).once('value').then(snap => {
-        const userTicks = snap.val() || {};
-        Object.keys(userTicks).forEach(key => {
-          db.ref('users/' + userId + '/ticks/' + TODAY + '/' + key + '/lastUpdated').set(0);
-        });
-      });
-      db.ref('users/' + userId + '/ber/' + TODAY).once('value').then(snap => {
-        const userBers = snap.val() || {};
-        Object.keys(userBers).forEach(key => {
-          db.ref('users/' + userId + '/ber/' + TODAY + '/' + key + '/lastUpdated').set(0);
-        });
-      });
-    });
+    db.ref('lastUpdated').set(Date.now());
     btn.disabled = false;
-    // Reset file inputs immediately after upload so new files can be selected without refreshing
-    ['powerbi','backorder','gradings'].forEach(k => {
-      const input = document.querySelector('#zone-'+k+' input[type=file]');
-      if (input) input.value = '';
-    });
     setTimeout(() => { closeAdmin(); loadAll(); }, 2000);
   } catch(err) {
-    console.error('Upload error:', err);
-    msg.textContent = '⚠ Upload failed: ' + (err.message || 'Unknown error. Check your connection and try again.');
+    msg.textContent = '⚠ Upload failed: ' + err.message;
     msg.style.color = 'var(--accent)';
     btn.disabled = false;
     fill.style.width = '0%';

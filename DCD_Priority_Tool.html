@@ -2531,10 +2531,11 @@ function showNotesModal(partsWithNotes) {
     const div = document.createElement('div');
     div.className = 'note-row';
     div.dataset.partid = item.partId;
+    div.dataset.partid = item.partId;
     div.innerHTML = '<div class="note-partid">' + item.partId
       + (newCount > 0 ? ' <span style="font-size:0.6rem;background:var(--accent2);color:white;padding:1px 5px;border-radius:3px;">' + newCount + ' new</span>' : '') + '</div>'
       + '<div class="note-text">' + (item.note || '') + '</div>'
-      + '<button class="note-toggle ' + (isExcluded ? 'remove' : 'keep') + '" onclick="toggleNoteRow(this, '' + item.partId + '')">'
+      + '<button class="note-toggle ' + (isExcluded ? 'remove' : 'keep') + '" data-partid="' + item.partId + '" onclick="toggleNoteRow(this, this.dataset.partid)">'
       + (isExcluded ? 'Excluded' : 'Keep') + '</button>';
     list.appendChild(div);
   });

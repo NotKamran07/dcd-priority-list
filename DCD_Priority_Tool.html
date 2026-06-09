@@ -361,6 +361,24 @@
   .admin-action-btn { font-family:'Syne',sans-serif; font-weight:700; font-size:0.75rem; text-transform:uppercase; letter-spacing:0.04em; padding:0.5rem 1.2rem; cursor:pointer; border-radius:3px; transition:opacity 0.2s; }
   .admin-action-btn:hover { opacity:0.8; }
 
+  /* Backorder Notes Modal */
+  #notes-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:4000; align-items:center; justify-content:center; }
+  #notes-overlay.open { display:flex; }
+  #notes-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1.5rem; width:600px; max-width:95vw; max-height:85vh; display:flex; flex-direction:column; }
+  #notes-box h2 { font-family:'Syne',sans-serif; font-weight:800; font-size:1rem; margin-bottom:0.25rem; }
+  #notes-box p { font-size:0.7rem; color:var(--muted); margin-bottom:1rem; }
+  #notes-list { overflow-y:auto; flex:1; border:1px solid var(--border); border-radius:4px; }
+  .note-row { display:flex; align-items:center; gap:0.75rem; padding:0.6rem 0.9rem; border-bottom:1px solid var(--border); }
+  .note-row:last-child { border-bottom:none; }
+  .note-row:hover { background:var(--surface2); }
+  .note-partid { font-family:'IBM Plex Mono',monospace; font-size:0.72rem; font-weight:600; flex:1; }
+  .note-text { font-size:0.7rem; color:var(--muted); flex:1.5; }
+  .note-toggle { font-family:'Syne',sans-serif; font-weight:700; font-size:0.65rem; text-transform:uppercase; padding:3px 10px; border-radius:3px; cursor:pointer; border:1px solid; transition:all 0.15s; white-space:nowrap; }
+  .note-toggle.keep { background:transparent; color:var(--green); border-color:var(--green); }
+  .note-toggle.remove { background:var(--accent); color:white; border-color:var(--accent); }
+  #notes-footer { display:flex; justify-content:space-between; align-items:center; margin-top:1rem; flex-shrink:0; }
+  #notes-summary { font-size:0.7rem; color:var(--muted); }
+
   @media print {
     @page { size: A4 landscape; margin: 0.3cm; }
     * { box-sizing: border-box; }
@@ -1004,6 +1022,8 @@ async function loadCSV(filename) {
       Object.keys(r).forEach(k => {
         if (/^part_id/i.test(k)) norm['Part ID'] = String(r[k]).trim();
         if (/^qty/i.test(k)) norm['Qty'] = Number(r[k]) || 0;
+        if (/^user_def251/i.test(k)) norm['Note'] = String(r[k]).trim();
+        if (/^request_id/i.test(k)) norm['RequestID'] = String(r[k]).trim();
       });
       if (norm['Part ID']) allRows.push(norm);
     });
@@ -2486,8 +2506,115 @@ function exportXLSX() {
   XLSX.writeFile(wb, `DCD_Priority_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
+// Parts excluded from priority list via notes modal
+let excludedParts = new Set(); // set of partIds excluded
+let excludedRequestIds = new Set(); // set of request_ids that have been excluded
+let pendingNotesData = []; // parts with notes waiting for user decision
+
+// Load saved excluded request IDs from Firebase
+function loadExcludedRequestIds() {
+  if (!currentUser) return;
+  db.ref('excludedNotes/' + currentUser).once('value').then(snap => {
+    const data = snap.val();
+    if (data) Object.keys(data).forEach(id => excludedRequestIds.add(id));
+  });
+}
+
+function showNotesModal(partsWithNotes) {
+  if (partsWithNotes.length === 0) return;
+  pendingNotesData = partsWithNotes;
+  const list = document.getElementById('notes-list');
+  list.innerHTML = '';
+  partsWithNotes.forEach(item => {
+    const isExcluded = excludedParts.has(item.partId);
+    const newCount = item.requestIds ? item.requestIds.filter(id => !excludedRequestIds.has(id)).length : 0;
+    const div = document.createElement('div');
+    div.className = 'note-row';
+    div.dataset.partid = item.partId;
+    div.innerHTML = '<div class="note-partid">' + item.partId
+      + (newCount > 0 ? ' <span style="font-size:0.6rem;background:var(--accent2);color:white;padding:1px 5px;border-radius:3px;">' + newCount + ' new</span>' : '') + '</div>'
+      + '<div class="note-text">' + (item.note || '') + '</div>'
+      + '<button class="note-toggle ' + (isExcluded ? 'remove' : 'keep') + '" onclick="toggleNoteRow(this, '' + item.partId + '')">'
+      + (isExcluded ? 'Excluded' : 'Keep') + '</button>';
+    list.appendChild(div);
+  });
+  updateNotesSummary();
+  document.getElementById('notes-overlay').classList.add('open');
+}
+
+function toggleNoteRow(btn, partId) {
+  if (excludedParts.has(partId)) {
+    excludedParts.delete(partId);
+    btn.className = 'note-toggle keep';
+    btn.textContent = 'Keep';
+  } else {
+    excludedParts.add(partId);
+    btn.className = 'note-toggle remove';
+    btn.textContent = 'Excluded';
+  }
+  updateNotesSummary();
+}
+
+function notesSelectAll(keep) {
+  pendingNotesData.forEach(item => {
+    if (keep) excludedParts.delete(item.partId);
+    else excludedParts.add(item.partId);
+  });
+  // Re-render rows
+  document.querySelectorAll('.note-row').forEach(row => {
+    const partId = row.dataset.partid;
+    const btn = row.querySelector('.note-toggle');
+    const isExcluded = excludedParts.has(partId);
+    btn.className = 'note-toggle ' + (isExcluded ? 'remove' : 'keep');
+    btn.textContent = isExcluded ? 'Excluded' : 'Keep';
+  });
+  updateNotesSummary();
+}
+
+function updateNotesSummary() {
+  const total = pendingNotesData.length;
+  const excluded = excludedParts.size;
+  document.getElementById('notes-summary').textContent = excluded + ' excluded, ' + (total - excluded) + ' kept';
+}
+
+function confirmNotes() {
+  document.getElementById('notes-overlay').classList.remove('open');
+  // Save excluded request_ids to Firebase so they're remembered next upload
+  if (currentUser) {
+    pendingNotesData.forEach(item => {
+      if (excludedParts.has(item.partId) && item.requestIds) {
+        // Only save request_ids that have notes (already filtered in notesByPart)
+        item.requestIds.forEach(id => {
+          excludedRequestIds.add(id);
+          db.ref('excludedNotes/' + currentUser + '/' + id).set(true);
+        });
+      }
+    });
+  }
+  // Re-filter outputRows to remove excluded parts
+  outputRows = outputRows.filter(r => !excludedParts.has(r['Part ID']));
+  renderTable();
+}
+
 // loadAll() is called after login
 </script>
+<!-- Backorder Notes Modal -->
+<div id="notes-overlay">
+  <div id="notes-box">
+    <h2>⚠ Parts with Notes</h2>
+    <p>These parts have notes in the backorder report. Choose which to keep or remove from the priority list.</p>
+    <div id="notes-list"></div>
+    <div id="notes-footer">
+      <div id="notes-summary"></div>
+      <div style="display:flex;gap:0.75rem;">
+        <button onclick="notesSelectAll(false)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;padding:4px 10px;cursor:pointer;border-radius:3px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Remove All</button>
+        <button onclick="notesSelectAll(true)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;padding:4px 10px;cursor:pointer;border-radius:3px;background:transparent;color:var(--green);border:1px solid var(--green);">Keep All</button>
+        <button onclick="confirmNotes()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;padding:4px 12px;cursor:pointer;border-radius:3px;background:var(--accent2);color:white;border:none;">Apply & Continue</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Admin Overlay -->
 <div id="admin-overlay">
   <div id="admin-box">

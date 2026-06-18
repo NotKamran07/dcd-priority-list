@@ -1381,8 +1381,10 @@ async function loadAll() {
 function renderTable() {
   const search = document.getElementById('search-input').value.toLowerCase();
   let rows = outputRows.filter(r => {
-    if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
+    if (r['Total Qty'] === '') return false;
     const eff = getEffectiveRow(r);
+    // Check effective (adjusted) qty, not original — manual stock corrections must apply here too
+    if (Number(eff['Total Qty']) === 0) return false;
     // Only hide when FULLY done (open orders AND rep req both at 0)
     if (!showDone && eff._fullyDone) return false;
     if (deptFilter !== 'all' && (r['Repair Team'] || '').trim() !== deptFilter) return false;
@@ -1480,7 +1482,7 @@ function renderTable() {
   const zeroRows = outputRows.filter(r => {
     const eff = getEffectiveRow(r);
     if (deptFilter !== 'all' && (r['Repair Team'] || '').trim() !== deptFilter) return false;
-    return (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') && !eff._fullyDone;
+    return (Number(eff['Total Qty']) === 0 || r['Total Qty'] === '') && !eff._fullyDone;
   });
   const zeroSection = document.getElementById('zero-section');
   const zeroBody = document.getElementById('zero-body');

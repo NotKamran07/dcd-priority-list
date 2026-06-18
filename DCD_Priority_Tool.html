@@ -1190,6 +1190,12 @@ function loginAs(userId) {
       if (currentTab === 'main') renderTable();
     });
 
+    // Listen to stock adjustments (shared across all users - corrects work system errors)
+    STOCK_ADJ_REF.on('value', snap => {
+      stockAdjustments = snap.val() || {};
+      if (currentTab === 'main') renderTable();
+    });
+
     // Load data
     loadAll();
   } catch(err) {

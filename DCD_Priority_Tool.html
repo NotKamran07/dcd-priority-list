@@ -913,11 +913,10 @@ function getEffectiveRow(row) {
   let effOpenOrders = is1to1 ? Math.max(0, newOpenOrders - berCount) : newOpenOrders;
   let effRepReq = is1to1 ? Math.max(0, newRepReq - berCount) : newRepReq;
 
-  // If stock has been manually removed and the remaining stock is now LOWER than the
-  // repair requirement, cap the rep req to match the available stock (can't repair what isn't there)
-  if (manualAdj > 0 && newTotalQty < effRepReq) {
+  // Cap rep req to available stock — can't repair what isn't there
+  // Applies in ALL cases: manual adjustment, BERs, ticks, anything that reduces stock below rep req
+  if (newTotalQty < effRepReq) {
     effRepReq = newTotalQty;
-    // For priority 1 parts, open orders should also not exceed the available stock
     if (row.Priority === 1 && effOpenOrders > newTotalQty) effOpenOrders = newTotalQty;
   }
 
@@ -1211,6 +1210,7 @@ function loginAs(userId) {
     // Listen to stock adjustments (shared across all users - corrects work system errors)
     STOCK_ADJ_REF.on('value', snap => {
       stockAdjustments = snap.val() || {};
+      updateDoneCount();
       if (currentTab === 'main') renderTable();
     });
 
@@ -1374,8 +1374,11 @@ async function loadAll() {
     document.getElementById('stat-r1').textContent = rank1.length;
     document.getElementById('stat-r2').textContent = rank2.length;
     document.getElementById('stat-total').textContent = outputRows.length;
-    // Calculate total rep req — sum of Rep Req across all parts (still required even if no stock)
-    const totalRepReq = outputRows.reduce((sum, r) => sum + (typeof r['Rep Req'] === 'number' ? r['Rep Req'] : 0), 0);
+    // Calculate total rep req using effective values (includes no-stock parts)
+    const totalRepReq = outputRows.reduce((sum, r) => {
+      const eff = getEffectiveRow(r);
+      return sum + (typeof eff['Rep Req'] === 'number' ? eff['Rep Req'] : 0);
+    }, 0);
     document.getElementById('stat-rep-req').textContent = totalRepReq;
     document.getElementById('loading-bar').style.display = 'none';
     document.getElementById('stats-bar').style.display = 'flex';

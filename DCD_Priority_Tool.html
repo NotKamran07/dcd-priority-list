@@ -456,6 +456,7 @@
   <div class="stat"><span class="stat-label">Rank 1 — Backorder</span><span class="stat-value r1" id="stat-r1">—</span></div>
   <div class="stat"><span class="stat-label">Rank 2 — PowerBI</span><span class="stat-value r2" id="stat-r2">—</span></div>
   <div class="stat"><span class="stat-label">Total Parts</span><span class="stat-value" id="stat-total">—</span></div>
+  <div class="stat"><span class="stat-label">Total Rep Req</span><span class="stat-value" id="stat-rep-req" style="color:var(--accent2);">—</span></div>
   <div class="stat"><span class="stat-label">Completed Today</span><span class="stat-value done" id="stat-done">0</span></div>
   <div class="stat"><span class="stat-label">BER Today</span><span class="stat-value" id="stat-ber-today" style="color:#c00000;">0</span></div>
 </div>
@@ -927,6 +928,15 @@ function updateDoneCount() {
   document.getElementById('tab-count-main').textContent = outputRows.filter(r => (typeof r['Total Qty'] === 'number' ? r['Total Qty'] : 0) > 0).length;
   // Tab badge shows total ticks only
   document.getElementById('tab-count-done').textContent = totalTicks + totalBers;
+  // Update live total rep req (using effective values - reflects ticks done by all users)
+  if (outputRows.length > 0) {
+    const liveRepReq = outputRows.reduce((sum, r) => {
+      const eff = getEffectiveRow(r);
+      return sum + (typeof eff['Rep Req'] === 'number' ? eff['Rep Req'] : 0);
+    }, 0);
+    const repReqEl = document.getElementById('stat-rep-req');
+    if (repReqEl) repReqEl.textContent = liveRepReq;
+  }
   // Refresh completed tab if active
   if (currentTab === 'done') renderCompleted();
 }
@@ -1356,6 +1366,9 @@ async function loadAll() {
     document.getElementById('stat-r1').textContent = rank1.length;
     document.getElementById('stat-r2').textContent = rank2.length;
     document.getElementById('stat-total').textContent = outputRows.length;
+    // Calculate total rep req — sum of Rep Req across all parts (still required even if no stock)
+    const totalRepReq = outputRows.reduce((sum, r) => sum + (typeof r['Rep Req'] === 'number' ? r['Rep Req'] : 0), 0);
+    document.getElementById('stat-rep-req').textContent = totalRepReq;
     document.getElementById('loading-bar').style.display = 'none';
     document.getElementById('stats-bar').style.display = 'flex';
     document.getElementById('tab-bar').style.display = 'flex';

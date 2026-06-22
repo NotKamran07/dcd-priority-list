@@ -1018,6 +1018,7 @@ async function loadCSV(filename) {
         if (/^part_id/i.test(k)) norm['Part ID'] = String(r[k]).trim();
         if (/^qty/i.test(k)) norm['Qty'] = Number(r[k]) || 0;
         if (/^user_def251/i.test(k)) norm['Note'] = String(r[k]).trim();
+        if (/^user_def3$/i.test(k)) norm['Status'] = String(r[k]).trim();
         if (/^request_id/i.test(k)) norm['RequestID'] = String(r[k]).trim();
       });
       if (norm['Part ID']) allRows.push(norm);
@@ -1322,25 +1323,29 @@ async function loadAll() {
       if (qty === 0) boZeroQtyParts.add(id); // flag parts with 0 qty
     });
 
-    // Exclude parts where ALL backorder rows have notes matching excluded keywords
+    // Exclude parts based on backorder report fields:
+    // - user_def251 (Note): exclude if ALL rows contain "done", "completed" or "in progress"
+    // - user_def3 (Status): exclude if ALL rows contain "AT DEPLOYMENT"
     const EXCLUDED_KEYWORDS = ['done', 'completed', 'in progress'];
     const excludedByNote = new Set();
-    // Group notes by partId
     const partNotes = {};
     boRows.forEach(r => {
       const partId = r['Part ID'];
       const note = (r['Note'] || '').toLowerCase().trim();
+      const status = (r['Status'] || '').toLowerCase().trim();
       if (!partId) return;
-      if (!partNotes[partId]) partNotes[partId] = { total: 0, excluded: 0 };
+      if (!partNotes[partId]) partNotes[partId] = { total: 0, noteExcluded: 0, deployExcluded: 0 };
       partNotes[partId].total++;
-      if (note && EXCLUDED_KEYWORDS.some(kw => note.includes(kw))) {
-        partNotes[partId].excluded++;
+      const isNoteExcluded = note && EXCLUDED_KEYWORDS.some(kw => note.includes(kw));
+      const isDeployExcluded = status === 'at deployment';
+      if (isNoteExcluded || isDeployExcluded) {
+        partNotes[partId].noteExcluded++;
       }
     });
-    // Only exclude if ALL rows for this part have excluded notes
+    // Exclude if ALL rows for this part are excluded by note OR by deployment status
     Object.keys(partNotes).forEach(partId => {
       const p = partNotes[partId];
-      if (p.total > 0 && p.excluded === p.total) {
+      if (p.total > 0 && p.noteExcluded >= p.total) {
         excludedByNote.add(partId);
       }
     });

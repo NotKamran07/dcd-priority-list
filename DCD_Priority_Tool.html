@@ -805,6 +805,7 @@ const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG5
 
 let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, bers = {}, showDone = true, deptFilter = 'all', currentTab = 'main';
 let currentUser = null;
+let filesUploadedAt = 0; // timestamp of last file upload via admin
 let dataLoaded = false;
 let stockAdjustments = {}; // partId -> total qty removed manually
 let adjustModalPartId = null;
@@ -837,7 +838,7 @@ function removeTick(partId) {
   if (current <= 1) {
     TICKS_REF.child(key).remove();
   } else {
-    TICKS_REF.child(key).set({ count: current - 1 });
+    TICKS_REF.child(key).set({ count: current - 1, lastUpdated: Date.now() });
   }
 }
 
@@ -845,7 +846,11 @@ function getTickCount(partId) {
   const key = safeKey(partId);
   const tick = ticks[key];
   if (!tick) return 0;
-  if (typeof tick === 'object') return tick.count || 0;
+  if (typeof tick === 'object') {
+    // Ignore ticks from before the last file upload
+    if (filesUploadedAt > 0 && (!tick.lastUpdated || tick.lastUpdated <= filesUploadedAt)) return 0;
+    return tick.count || 0;
+  }
   return tick ? 1 : 0;
 }
 
@@ -853,7 +858,11 @@ function getBerCount(partId) {
   const key = safeKey(partId);
   const ber = bers[key];
   if (!ber) return 0;
-  if (typeof ber === 'object') return ber.count || 0;
+  if (typeof ber === 'object') {
+    // Ignore BERs from before the last file upload
+    if (filesUploadedAt > 0 && (!ber.lastUpdated || ber.lastUpdated <= filesUploadedAt)) return 0;
+    return ber.count || 0;
+  }
   return 0;
 }
 
@@ -866,7 +875,7 @@ function addBer(partId) {
   const currentTick = getTickCount(partId);
   // Can't BER more than available stock
   if (currentBer + currentTick >= origQty) return;
-  BER_REF.child(key).set({ count: currentBer + 1 });
+  BER_REF.child(key).set({ count: currentBer + 1, lastUpdated: Date.now() });
 }
 
 function removeBer(partId) {
@@ -876,7 +885,7 @@ function removeBer(partId) {
   if (current === 1) {
     BER_REF.child(key).remove();
   } else {
-    BER_REF.child(key).set({ count: current - 1 });
+    BER_REF.child(key).set({ count: current - 1, lastUpdated: Date.now() });
   }
 }
 
@@ -1277,6 +1286,11 @@ function startFirebaseListeners() {
 }
 
 async function loadAll() {
+  // Load file upload timestamp
+  try {
+    const snap = await db.ref('filesUploadedAt').once('value');
+    filesUploadedAt = snap.val() || 0;
+  } catch(e) { filesUploadedAt = 0; }
 
   document.getElementById('loading-bar').style.display = 'flex';
   document.getElementById('stats-bar').style.display = 'none';
@@ -2698,7 +2712,10 @@ async function uploadAdminFiles() {
     fill.style.width = '100%';
     msg.textContent = '✓ Uploaded! All users will see the updated list.';
     msg.style.color = 'var(--green)';
-    db.ref('lastUpdated').set(Date.now());
+    const uploadTs = Date.now();
+    db.ref('lastUpdated').set(uploadTs);
+    db.ref('filesUploadedAt').set(uploadTs);
+    filesUploadedAt = uploadTs;
     btn.disabled = false;
     setTimeout(() => { closeAdmin(); loadAll(); }, 2000);
   } catch(err) {

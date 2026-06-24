@@ -842,24 +842,42 @@ function removeTick(partId) {
   }
 }
 
+// Raw tick count — all ticks for today, regardless of upload timestamp (for display/history)
 function getTickCount(partId) {
   const key = safeKey(partId);
   const tick = ticks[key];
   if (!tick) return 0;
+  if (typeof tick === 'object') return tick.count || 0;
+  return tick ? 1 : 0;
+}
+
+// Filtered tick count — only post-upload ticks (for quantity calculations)
+function getFilteredTickCount(partId) {
+  const key = safeKey(partId);
+  const tick = ticks[key];
+  if (!tick) return 0;
   if (typeof tick === 'object') {
-    // Ignore ticks from before the last file upload
     if (filesUploadedAt > 0 && (!tick.lastUpdated || tick.lastUpdated <= filesUploadedAt)) return 0;
     return tick.count || 0;
   }
   return tick ? 1 : 0;
 }
 
+// Raw BER count — all BERs for today (for display/history)
 function getBerCount(partId) {
   const key = safeKey(partId);
   const ber = bers[key];
   if (!ber) return 0;
+  if (typeof ber === 'object') return ber.count || 0;
+  return 0;
+}
+
+// Filtered BER count — only post-upload BERs (for quantity calculations)
+function getFilteredBerCount(partId) {
+  const key = safeKey(partId);
+  const ber = bers[key];
+  if (!ber) return 0;
   if (typeof ber === 'object') {
-    // Ignore BERs from before the last file upload
     if (filesUploadedAt > 0 && (!ber.lastUpdated || ber.lastUpdated <= filesUploadedAt)) return 0;
     return ber.count || 0;
   }
@@ -890,7 +908,7 @@ function removeBer(partId) {
 }
 
 function getAllUserTickCount(partId) {
-  // Sum ticks across ALL users for Open Orders calculation
+  // Sum ticks across ALL users (raw - for display)
   const key = safeKey(partId);
   let total = 0;
   Object.values(allUserTicks).forEach(userTicks => {
@@ -901,10 +919,25 @@ function getAllUserTickCount(partId) {
   return total;
 }
 
+function getFilteredAllUserTickCount(partId) {
+  // Sum ticks across ALL users, ignoring pre-upload ticks (for qty calculations)
+  const key = safeKey(partId);
+  let total = 0;
+  Object.values(allUserTicks).forEach(userTicks => {
+    if (!userTicks) return;
+    const t = userTicks[key];
+    if (t && typeof t === 'object') {
+      if (filesUploadedAt > 0 && (!t.lastUpdated || t.lastUpdated <= filesUploadedAt)) return;
+      total += t.count || 0;
+    }
+  });
+  return total;
+}
+
 function getEffectiveRow(row) {
-  const myTickCount = getTickCount(row['Part ID']);
-  const allTickCount = getAllUserTickCount(row['Part ID']); // all users combined
-  const berCount = getBerCount(row['Part ID']);
+  const myTickCount = getFilteredTickCount(row['Part ID']);
+  const allTickCount = getFilteredAllUserTickCount(row['Part ID']); // all users combined, post-upload only
+  const berCount = getFilteredBerCount(row['Part ID']);
   const manualAdj = stockAdjustments[safeKey(row['Part ID'])] || 0; // manual stock correction
 
   const origOpenOrders = typeof row['Open Orders'] === 'number' ? row['Open Orders'] : 0;
@@ -2516,7 +2549,7 @@ function renderCompleted() {
 
   doneRows.forEach(row => {
     const tickCount = getTickCount(row['Part ID']);
-    const berCount = getBerCount(row['Part ID']);
+    const berCount = getFilteredBerCount(row['Part ID']);
     const cls = row['Part Class'] || '';
     const val = typeof row.Value === 'number' ? row.Value : 0;
     const berVal = 0.10;

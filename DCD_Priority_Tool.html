@@ -2549,7 +2549,7 @@ function renderCompleted() {
 
   doneRows.forEach(row => {
     const tickCount = getTickCount(row['Part ID']);
-    const berCount = getFilteredBerCount(row['Part ID']);
+    const berCount = getBerCount(row['Part ID']);
     const cls = row['Part Class'] || '';
     const val = typeof row.Value === 'number' ? row.Value : 0;
     const berVal = 0.10;

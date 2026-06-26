@@ -888,11 +888,10 @@ function addBer(partId) {
   const key = safeKey(partId);
   const row = outputRows.find(r => r['Part ID'] === partId);
   if (!row) return;
-  const origQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
-  const currentBer = getBerCount(partId);
-  const currentTick = getTickCount(partId);
-  // Can't BER more than available stock
-  if (currentBer + currentTick >= origQty) return;
+  const eff = getEffectiveRow(row);
+  const effQty = typeof eff['Total Qty'] === 'number' ? eff['Total Qty'] : 0;
+  // Can't BER more than available effective stock
+  if (effQty <= 0) return;
   BER_REF.child(key).set({ count: currentBer + 1, lastUpdated: Date.now() });
 }
 
@@ -1512,17 +1511,10 @@ function renderTable() {
 
     const rowTickCount = getTickCount(partId);
     const berCount = getBerCount(partId);
-    const origTotalQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
-    // Count all users' ticks for this part
-    const allTicksForPart = Object.entries(allUserTicks).reduce((sum, [uid, userTicks]) => {
-      if (!userTicks) return sum;
-      const k = safeKey(partId);
-      const t = userTicks[k];
-      return sum + (t && typeof t === 'object' ? (t.count || 0) : 0);
-    }, 0);
-    const usedQty = allTicksForPart + berCount;
-    const plusDisabled = origTotalQty <= 0 || usedQty >= origTotalQty;
-    const berPlusDisabled = origTotalQty <= 0 || usedQty >= origTotalQty;
+    const effTotalQty = typeof eff['Total Qty'] === 'number' ? eff['Total Qty'] : 0;
+    const usedQty = rowTickCount + berCount;
+    const plusDisabled = effTotalQty <= 0;
+    const berPlusDisabled = effTotalQty <= 0;
     // Build user tick indicators
     const userIndicators = Object.entries(allUserTicks).map(([uid, userTicks]) => {
       if (!userTicks) return '';

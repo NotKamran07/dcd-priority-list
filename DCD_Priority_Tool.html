@@ -829,7 +829,7 @@ function safeKey(partId) {
 function addTick(partId) {
   const key = safeKey(partId);
   const current = (ticks[key] && typeof ticks[key] === 'object') ? (ticks[key].count || 0) : 0;
-  TICKS_REF.child(key).set({ count: current + 1 });
+  TICKS_REF.child(key).set({ count: current + 1, lastUpdated: Date.now() });
 }
 
 function removeTick(partId) {
@@ -1724,7 +1724,7 @@ function decrementHistoryEntry(date, key, currentCount, currentBer) {
     TICKS_REF.child(key).transaction(t => {
       if (!t) return null;
       const newC = Math.max(0, (t.count || 0) - 1);
-      return newC <= 0 ? null : { count: newC };
+      return newC <= 0 ? null : { count: newC, lastUpdated: Date.now() };
     });
   }
 }
@@ -1740,8 +1740,9 @@ function incrementHistoryEntry(date, key) {
   // Sync to ticks ref if today
   if (date === TODAY && !key.startsWith('ber_')) {
     TICKS_REF.child(key).transaction(t => {
-      if (!t) return { count: 1 };
-      return { count: (t.count || 0) + 1 };
+      const now = Date.now();
+      if (!t) return { count: 1, lastUpdated: now };
+      return { count: (t.count || 0) + 1, lastUpdated: now };
     });
   }
 }

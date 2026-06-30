@@ -477,6 +477,7 @@
   <button id="show-done-btn" onclick="toggleDone()">Hide Completed</button>
   <button id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
   <button id="reset-btn" onclick="resetTicks()">Reset All Ticks</button>
+  <button onclick="clearAllStockAdjustments()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Clear Stock Adjustments</button>
 
   <div id="print-dropdown-wrap" style="position:relative;display:inline-block;">
     <button class="print-btn" onclick="togglePrintMenu(event)">🖨 Print ▾</button>
@@ -1125,10 +1126,25 @@ function openAdjustModal(partId) {
   const row = outputRows.find(r => r['Part ID'] === partId);
   if (!row) return;
   const eff = getEffectiveRow(row);
+  const reportQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
+  const effQty = typeof eff['Total Qty'] === 'number' ? eff['Total Qty'] : 0;
+  const currentAdj = stockAdjustments[safeKey(partId)] || 0;
+
   document.getElementById('adjust-part-id').textContent = partId;
-  document.getElementById('adjust-current-qty').textContent = eff['Total Qty'] !== '' ? eff['Total Qty'] : '0';
+  document.getElementById('adjust-current-qty').textContent = effQty;
+  document.getElementById('adjust-report-qty').textContent = reportQty;
+  document.getElementById('adjust-current-qty2').textContent = effQty;
+
+  const adjEl = document.getElementById('adjust-diff');
+  if (currentAdj === 0) {
+    adjEl.textContent = 'None';
+    adjEl.style.color = 'var(--muted)';
+  } else {
+    adjEl.textContent = (currentAdj > 0 ? '-' : '+') + Math.abs(currentAdj);
+    adjEl.style.color = currentAdj > 0 ? 'var(--accent)' : 'var(--green)';
+  }
+
   document.getElementById('adjust-qty-input').value = 1;
-  document.getElementById('adjust-qty-input').max = eff['Total Qty'] || 1;
   document.getElementById('adjust-overlay').style.display = 'flex';
 }
 
@@ -1149,6 +1165,12 @@ function confirmAdjust(direction) {
     STOCK_ADJ_REF.child(key).set(current + qty); // add to adjustment to decrease effective stock
   }
   closeAdjustModal();
+}
+
+function clearAllStockAdjustments() {
+  if (!confirm('This will reset all manual stock adjustments. Continue?')) return;
+  db.ref('stockAdjustments').remove();
+  renderTable();
 }
 
 function closeModal() {
@@ -2742,6 +2764,8 @@ async function uploadAdminFiles() {
     db.ref('lastUpdated').set(uploadTs);
     db.ref('filesUploadedAt').set(uploadTs);
     filesUploadedAt = uploadTs;
+    // Reset all stock adjustments on new file upload - fresh report = fresh stock
+    db.ref('stockAdjustments').remove();
     btn.disabled = false;
     setTimeout(() => { closeAdmin(); loadAll(); }, 2000);
   } catch(err) {

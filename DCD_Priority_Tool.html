@@ -2266,7 +2266,8 @@ function renderHistory() {
     const bg = i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
     const earned = e.earned || (e.val * e.count) || 0;
     const entryKey = e._key || '';
-    totalRepairs += e.count || 0;
+    // Only count repairs (e.count), not BERs - BERs are tracked separately
+    if (e.type !== 'ber' && e.count) totalRepairs += e.count;
     totalEarned += earned;
     const cls = e.cls || '';
     const berCount = e.berCount || 0;

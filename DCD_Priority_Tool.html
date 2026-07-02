@@ -2127,13 +2127,42 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
   // Also ensure grade breakdown is visible
   const bd = document.getElementById('ms-grade-breakdown');
   if (bd) bd.style.display = 'block';
+  
+  // Update bar labels for new targets
+  const labelTexts = {
+    '18': isNewTargets ? '11/day' : '18/day',
+    '21': isNewTargets ? '13/day' : '21/day',
+    '24': isNewTargets ? '15/day' : '24/day'
+  };
+  Object.entries(labelTexts).forEach(([id, text]) => {
+    const bars = document.querySelectorAll(`#bar-${id}`);
+    if (bars[0]) {
+      const labelDiv = bars[0].closest('.target-bar-wrap')?.querySelector('.target-bar-label');
+      if (labelDiv) {
+        const colorSpan = labelDiv.querySelector('span');
+        labelDiv.innerHTML = `${text} <span style="color:#f0c040;font-weight:700;">+£${id === '18' ? '25' : id === '21' ? '50' : '75'}</span>`;
+      }
+    }
+  });
 
   const currentAvg = totalRepairs / adjustedDays;
-  const targets = [
-    { id: '18', target: 18, bonus: 25 },
-    { id: '21', target: 21, bonus: 50 },
-    { id: '24', target: 24, bonus: 75 }
-  ];
+  
+  // New targets from July 2026 onwards (11/day, 13/day, 15/day)
+  // Old targets before July 2026 (18/day, 21/day, 24/day)
+  const filterMonth = activeMonthFilter === 'all' ? TODAY.slice(0, 7) : activeMonthFilter;
+  const isNewTargets = filterMonth >= '2026-07';
+  
+  const targets = isNewTargets
+    ? [
+        { id: '18', target: 11, bonus: 25 },
+        { id: '21', target: 13, bonus: 50 },
+        { id: '24', target: 15, bonus: 75 }
+      ]
+    : [
+        { id: '18', target: 18, bonus: 25 },
+        { id: '21', target: 21, bonus: 50 },
+        { id: '24', target: 24, bonus: 75 }
+      ];
 
   // Check if this is the current month or a past month
   const currentMonth = TODAY.slice(0, 7);

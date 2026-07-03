@@ -887,13 +887,9 @@ function getFilteredBerCount(partId) {
 
 function addBer(partId) {
   const key = safeKey(partId);
-  const row = outputRows.find(r => r['Part ID'] === partId);
-  if (!row) return;
-  const eff = getEffectiveRow(row);
-  const effQty = typeof eff['Total Qty'] === 'number' ? eff['Total Qty'] : 0;
-  // Can't BER more than available effective stock
-  if (effQty <= 0) return;
   const currentBer = getBerCount(partId);
+  // For Completed Today tab: allow BER even if part not in outputRows or stock is 0
+  // Just check that we're not going negative
   BER_REF.child(key).set({ count: currentBer + 1, lastUpdated: Date.now() });
 }
 

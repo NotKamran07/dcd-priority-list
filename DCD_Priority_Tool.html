@@ -2774,7 +2774,7 @@ function handleAdminFile(key, input) {
   document.getElementById('status-'+key+'-admin').textContent = '✓ ' + file.name;
   document.getElementById('status-'+key+'-admin').className = 'admin-upload-status ok';
   document.getElementById('zone-'+key).classList.add('loaded');
-  document.getElementById('admin-upload-btn').disabled = !(adminFiles.powerbi || adminFiles.backorder);
+  document.getElementById('admin-upload-btn').disabled = !(adminFiles.powerbi || adminFiles.backorder || adminFiles.gradings);
 }
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {

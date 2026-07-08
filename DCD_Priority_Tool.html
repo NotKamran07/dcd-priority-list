@@ -2504,12 +2504,11 @@ let adminFiles = { powerbi: null, backorder: null, gradings: null };
 let adminLoggedIn = false;
 
 function openAdmin() {
+  adminLoggedIn = true;
+  sessionStorage.setItem('adminLoggedIn', 'true');
   document.getElementById('admin-overlay').classList.add('open');
-  document.getElementById('admin-pwd').value = '';
-  document.getElementById('admin-pwd-error').style.display = 'none';
-  document.getElementById('admin-login').style.display = adminLoggedIn ? 'none' : 'flex';
-  document.getElementById('admin-panel').style.display = adminLoggedIn ? 'block' : 'none';
-  if (!adminLoggedIn) setTimeout(() => document.getElementById('admin-pwd').focus(), 100);
+  document.getElementById('admin-login').style.display = 'none';
+  document.getElementById('admin-panel').style.display = 'block';
 }
 function closeAdmin() {
   document.getElementById('admin-overlay').classList.remove('open');

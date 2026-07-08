@@ -1057,8 +1057,9 @@ function searchParts(query) {
   const dropdown = document.getElementById('part-dropdown');
   if (!query || query.length < 1) { dropdown.style.display = 'none'; return; }
   const q = query.toUpperCase();
-  // Search through DCD_PARTS
-  const matches = [...DCD_PARTS].filter(p => p.includes(q)).slice(0, 30);
+  // Search through ALL parts in gradeMap (includes non-DCD parts)
+  const allParts = Object.keys(window.gradeMap || {});
+  const matches = allParts.filter(p => p.includes(q)).slice(0, 30);
   if (matches.length === 0) { dropdown.style.display = 'none'; return; }
   dropdown.innerHTML = '';
   matches.forEach(partId => {

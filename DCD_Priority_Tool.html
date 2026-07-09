@@ -1469,7 +1469,8 @@ function renderTable() {
       <td class="num-cell">${openOrdersDisplay !== '' ? openOrdersDisplay : ''}</td>
       <td class="num-cell">${eff['Total Qty'] !== '' ? eff['Total Qty'] : ''}</td>
       <td class="num-cell grade-${cls}">${cls}</td>
-      <td class="num-cell">${valStr}</td>`;
+      <td class="num-cell">${valStr}</td>
+      <td class="num-cell"><button class="adjust-btn" data-partid="${partId}" onclick="openAdjustModal(this.dataset.partid)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.7rem;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);cursor:pointer;border-radius:2px;">⚙ Adjust</button></td>`;
     tbody.appendChild(tr);
   });
   document.getElementById('row-count').textContent = `${rows.length} parts shown`;

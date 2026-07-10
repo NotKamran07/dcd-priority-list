@@ -1292,6 +1292,7 @@ async function loadAll() {
     const rank1 = [], rank2 = [];
 
     Object.keys(boMap).forEach(id => {
+      if (excludedByNote.has(id)) return; // Skip excluded parts
       const bo = boMap[id], pbi = pbiMap[id] || { repReq: 0, totalBad: 0, team: '' };
       const cls = gradeMap[id] || '';
       // If backorder report explicitly shows qty=0, force 0 regardless of PowerBI

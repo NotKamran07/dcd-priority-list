@@ -797,6 +797,7 @@ const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG5
 
 let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, bers = {}, showDone = true, deptFilter = 'all', currentTab = 'main';
 let currentUser = null;
+let filesUploadedAt = 0; // timestamp of last file upload
 let dataLoaded = false;
 let allUserTicks = {}; // all users' ticks for live view
 const USERS = {
@@ -826,10 +827,11 @@ function removeTick(partId) {
   if (current <= 1) {
     TICKS_REF.child(key).remove();
   } else {
-    TICKS_REF.child(key).set({ count: current - 1 });
+    TICKS_REF.child(key).set({ count: current - 1, lastUpdated: Date.now() });
   }
 }
 
+// Raw tick count — all ticks for today (for display/history)
 function getTickCount(partId) {
   const key = safeKey(partId);
   const tick = ticks[key];
@@ -838,11 +840,36 @@ function getTickCount(partId) {
   return tick ? 1 : 0;
 }
 
+// Filtered tick count — only post-upload ticks (for quantity calculations)
+function getFilteredTickCount(partId) {
+  const key = safeKey(partId);
+  const tick = ticks[key];
+  if (!tick) return 0;
+  if (typeof tick === 'object') {
+    if (filesUploadedAt > 0 && (!tick.lastUpdated || tick.lastUpdated <= filesUploadedAt)) return 0;
+    return tick.count || 0;
+  }
+  return tick ? 1 : 0;
+}
+
+// Raw BER count — all BERs for today (for display/history)
 function getBerCount(partId) {
   const key = safeKey(partId);
   const ber = bers[key];
   if (!ber) return 0;
   if (typeof ber === 'object') return ber.count || 0;
+  return 0;
+}
+
+// Filtered BER count — only post-upload BERs (for quantity calculations)
+function getFilteredBerCount(partId) {
+  const key = safeKey(partId);
+  const ber = bers[key];
+  if (!ber) return 0;
+  if (typeof ber === 'object') {
+    if (filesUploadedAt > 0 && (!ber.lastUpdated || ber.lastUpdated <= filesUploadedAt)) return 0;
+    return ber.count || 0;
+  }
   return 0;
 }
 
@@ -1209,6 +1236,12 @@ function startFirebaseListeners() {
 }
 
 async function loadAll() {
+  // Load file upload timestamp
+  try {
+    const snap = await db.ref('filesUploadedAt').once('value');
+    filesUploadedAt = snap.val() || 0;
+  } catch(e) { filesUploadedAt = 0; }
+
 
   document.getElementById('loading-bar').style.display = 'flex';
   document.getElementById('stats-bar').style.display = 'none';

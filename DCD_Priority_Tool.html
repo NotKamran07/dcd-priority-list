@@ -798,6 +798,7 @@ const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG5
 let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, bers = {}, showDone = true, deptFilter = 'all', currentTab = 'main';
 let currentUser = null;
 let filesUploadedAt = 0; // timestamp of last file upload
+let excludedByNote = new Set(); // parts to exclude from priority list
 let dataLoaded = false;
 let allUserTicks = {}; // all users' ticks for live view
 const USERS = {

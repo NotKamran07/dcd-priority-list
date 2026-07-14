@@ -1279,9 +1279,34 @@ async function loadAll() {
 
     const boMap = {};
     const boZeroQtyParts = new Set(); // parts with qty=0 in backorder report
+    // Build exclusion set from Note and Status columns
+    excludedByNote.clear();
+    const EXCLUDED_KEYWORDS = ['done', 'completed', 'in progress'];
+    const partNotes = {};
+    boRows.forEach(r => {
+      const partId = r['Part ID'];
+      const note = (r['Note'] || '').toLowerCase().trim();
+      const status = (r['Status'] || '').toLowerCase().trim();
+      if (!partId) return;
+      if (!partNotes[partId]) partNotes[partId] = { total: 0, excluded: 0 };
+      partNotes[partId].total++;
+      const isNoteExcluded = note && EXCLUDED_KEYWORDS.some(kw => note.includes(kw));
+      const isDeployExcluded = status === 'at deployment';
+      if (isNoteExcluded || isDeployExcluded) {
+        partNotes[partId].excluded++;
+      }
+    });
+    Object.keys(partNotes).forEach(partId => {
+      const p = partNotes[partId];
+      if (p.total > 0 && p.excluded >= p.total) {
+        excludedByNote.add(partId);
+      }
+    });
+
     boRows.forEach(r => {
       const id = (r['Part ID'] || '').toString().trim();
       if (!id || !DCD_PARTS.has(id)) return;
+      if (excludedByNote.has(id)) return; // Skip excluded parts
       if (!boMap[id]) boMap[id] = { count: 0, totalQty: 0 };
       boMap[id].count++;
       const qty = Number(r['Qty']) || 0;

@@ -1017,6 +1017,8 @@ async function loadCSV(filename) {
       Object.keys(r).forEach(k => {
         if (/^part_id/i.test(k)) norm['Part ID'] = String(r[k]).trim();
         if (/^qty/i.test(k)) norm['Qty'] = Number(r[k]) || 0;
+        if (/^user_def251/i.test(k)) norm['Note'] = String(r[k]).trim();
+        if (/^user_def3$/i.test(k)) norm['Status'] = String(r[k]).trim();
       });
       if (norm['Part ID']) allRows.push(norm);
     });

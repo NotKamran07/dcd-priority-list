@@ -1283,6 +1283,8 @@ async function loadAll() {
     excludedByNote.clear();
     const EXCLUDED_KEYWORDS = ['done', 'completed', 'in progress'];
     const partNotes = {};
+    console.log('boRows count:', boRows.length);
+    if (boRows.length > 0) console.log('First boRow:', boRows[0]);
     boRows.forEach(r => {
       const partId = r['Part ID'];
       const note = (r['Note'] || '').toLowerCase().trim();
@@ -1300,8 +1302,10 @@ async function loadAll() {
       const p = partNotes[partId];
       if (p.total > 0 && p.excluded >= p.total) {
         excludedByNote.add(partId);
+        console.log('Excluding:', partId, 'Total:', p.total, 'Excluded:', p.excluded);
       }
     });
+    console.log('Final excludedByNote:', excludedByNote);
 
     boRows.forEach(r => {
       const id = (r['Part ID'] || '').toString().trim();

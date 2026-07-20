@@ -978,19 +978,25 @@ function getEffectiveRow(row) {
   const newRepReq = Math.max(0, origRepReq - allTickCount);
   const newOpenOrders = row.Priority === 1 ? Math.max(0, origOpenOrders - allTickCount) : origOpenOrders;
 
-  // After ticks, check if Rep Req / Open Orders have caught up to effective Total Qty
-  // If they are >= newTotalQty (before manual adj), they follow it down with the adjustment
-  // If they are still higher, they stay as-is until Total Qty catches up
-  const qtyAfterTicks = Math.max(0, origTotalQty - allTickCount - berCount);
+  // Total Qty after ticks only (before BER and manual adj) — used as threshold
+  const qtyAfterTicks = Math.max(0, origTotalQty - allTickCount);
 
-  const effRepReq = newRepReq <= qtyAfterTicks
-    ? Math.max(0, newRepReq - manualAdj - berCount)  // 1:1 or caught up — follow adjustment
-    : Math.max(0, newRepReq - berCount);              // still higher — don't adjust
+  // Rep Req: follows manual adj only if it has caught up to Total Qty (after ticks)
+  // BER reduces Rep Req only if Rep Req === Total Qty (strict 1:1)
+  const repReqEqualsTotalQty = origRepReq === origTotalQty;
+  const effRepReq = repReqEqualsTotalQty
+    ? Math.max(0, newRepReq - berCount - manualAdj)   // exact match — follow everything
+    : (newRepReq <= qtyAfterTicks - manualAdj
+        ? Math.max(0, newRepReq - manualAdj)           // caught up after adj — follow adj only
+        : newRepReq);                                   // still higher — don't adjust
 
+  // Open Orders: only reduce with ticks (already done in newOpenOrders)
+  // BER and manual adj only affect Open Orders if Open Orders === Total Qty (strict 1:1)
+  const openOrdersEqualsTotalQty = row.Priority === 1 && origOpenOrders === origTotalQty;
   const effOpenOrders = row.Priority === 1
-    ? (newOpenOrders <= qtyAfterTicks
-        ? Math.max(0, newOpenOrders - manualAdj - berCount)
-        : Math.max(0, newOpenOrders - berCount))
+    ? (openOrdersEqualsTotalQty
+        ? Math.max(0, newOpenOrders - berCount - manualAdj)  // exact match — follow everything
+        : newOpenOrders)                                       // different — ticks only
     : newOpenOrders;
 
   const fullyDone = row.Priority === 1 ? effOpenOrders === 0 : effRepReq === 0;

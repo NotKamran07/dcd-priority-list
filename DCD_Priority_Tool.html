@@ -971,16 +971,27 @@ function getEffectiveRow(row) {
   const origTotalQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
   const origRepReq = typeof row['Rep Req'] === 'number' ? row['Rep Req'] : 0;
 
-  // Open Orders and Rep Req subtract ALL users' ticks combined + manual adjustment
-  const newOpenOrders = row.Priority === 1 ? Math.max(0, origOpenOrders - allTickCount - manualAdj) : origOpenOrders;
-  const newRepReq = Math.max(0, origRepReq - allTickCount - manualAdj);
-  // Total Qty subtracts all ticks + BERs + manual adjustment
+  // Total Qty always subtracts ticks + BERs + manual adjustment
   const newTotalQty = Math.max(0, origTotalQty - allTickCount - berCount - manualAdj);
 
-  // Special case: if rep req and total qty are equal (1:1), BER also reduces rep req and open orders
-  const is1to1 = origRepReq > 0 && origTotalQty > 0 && origRepReq === origTotalQty;
-  const effOpenOrders = is1to1 ? Math.max(0, newOpenOrders - berCount) : newOpenOrders;
-  const effRepReq = is1to1 ? Math.max(0, newRepReq - berCount) : newRepReq;
+  // Rep Req and Open Orders only subtract ticks first (no manual adj yet)
+  const newRepReq = Math.max(0, origRepReq - allTickCount);
+  const newOpenOrders = row.Priority === 1 ? Math.max(0, origOpenOrders - allTickCount) : origOpenOrders;
+
+  // After ticks, check if Rep Req / Open Orders have caught up to effective Total Qty
+  // If they are >= newTotalQty (before manual adj), they follow it down with the adjustment
+  // If they are still higher, they stay as-is until Total Qty catches up
+  const qtyAfterTicks = Math.max(0, origTotalQty - allTickCount - berCount);
+
+  const effRepReq = newRepReq <= qtyAfterTicks
+    ? Math.max(0, newRepReq - manualAdj - berCount)  // 1:1 or caught up — follow adjustment
+    : Math.max(0, newRepReq - berCount);              // still higher — don't adjust
+
+  const effOpenOrders = row.Priority === 1
+    ? (newOpenOrders <= qtyAfterTicks
+        ? Math.max(0, newOpenOrders - manualAdj - berCount)
+        : Math.max(0, newOpenOrders - berCount))
+    : newOpenOrders;
 
   const fullyDone = row.Priority === 1 ? effOpenOrders === 0 : effRepReq === 0;
 

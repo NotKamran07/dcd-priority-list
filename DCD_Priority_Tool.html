@@ -2045,7 +2045,20 @@ function updateMonthSummary(filteredEntries, monthKey, passedDays) {
     const cls = (e.cls || '').toUpperCase();
     if (cls) gradeCounts[cls] = (gradeCounts[cls] || 0) + (e.count || 0);
   });
-  const berTotal = filteredEntries.reduce(function(s, e) { return s + (e.berCount || 0); }, 0);
+  // Only count BERs from non-BER-only entries to avoid double counting
+  // (BER-only entries have berCount set, but so do repair entries for the same part)
+  const seenBerParts = new Set();
+  let berTotal = 0;
+  filteredEntries.forEach(function(e) {
+    const partKey = (e.date || '') + '__' + (e.partId || '');
+    if (e.isBerOnly) {
+      // Only count if no repair entry exists for this part+date (avoid double count)
+      if (!seenBerParts.has(partKey)) berTotal += e.berCount || 0;
+    } else {
+      berTotal += e.berCount || 0;
+      seenBerParts.add(partKey); // mark this part as counted
+    }
+  });
   if (berTotal > 0) gradeCounts['BER'] = berTotal;
 
   const breakdown = document.getElementById('ms-grade-breakdown');
@@ -2112,6 +2125,17 @@ function updateTargetTracker(totalRepairs, adjustedDays) {
         { id: '21', target: 21, bonus: 50 },
         { id: '24', target: 24, bonus: 75 }
       ];
+
+  // Update label text to match correct targets
+  if (isNewTargets) {
+    document.getElementById('label-18').innerHTML = '11/day <span style="color:#f0c040;font-weight:700;">+£25</span>';
+    document.getElementById('label-21').innerHTML = '13/day <span style="color:#f0a040;font-weight:700;">+£50</span>';
+    document.getElementById('label-24').innerHTML = '15/day <span style="color:#2ecc71;font-weight:700;">+£75</span>';
+  } else {
+    document.getElementById('label-18').innerHTML = '18/day <span style="color:#f0c040;font-weight:700;">+£25</span>';
+    document.getElementById('label-21').innerHTML = '21/day <span style="color:#f0a040;font-weight:700;">+£50</span>';
+    document.getElementById('label-24').innerHTML = '24/day <span style="color:#2ecc71;font-weight:700;">+£75</span>';
+  }
 
   // Check if this is the current month or a past month
   const currentMonth = TODAY.slice(0, 7);
@@ -2245,7 +2269,8 @@ function renderHistory() {
     const bg = i % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
     const earned = e.earned || (e.val * e.count) || 0;
     const entryKey = e._key || '';
-    totalRepairs += e.count || 0;
+    // Only count as repair if not a BER-only entry
+    if (!e.isBerOnly) totalRepairs += e.count || 0;
     totalEarned += earned;
     const cls = e.cls || '';
     const berCount = e.berCount || 0;

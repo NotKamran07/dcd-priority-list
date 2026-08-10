@@ -897,8 +897,9 @@ function saveNewPart() {
     errEl.style.display = 'block';
     return;
   }
-  if ((window.gradeMap || {})[partId] || DCD_PARTS.has(partId)) {
-    errEl.textContent = 'This part already exists in the system.';
+  const alreadyGraded = !!(window.gradeMap || {})[partId];
+  if (alreadyGraded) {
+    errEl.textContent = 'This part already has a grade assigned.';
     errEl.style.display = 'block';
     return;
   }
@@ -975,14 +976,9 @@ function getFilteredBerCount(partId) {
 
 function addBer(partId) {
   const key = safeKey(partId);
-  const row = outputRows.find(r => r['Part ID'] === partId);
-  if (!row) return;
-  const origQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
   const currentBer = getBerCount(partId);
-  const currentTick = getTickCount(partId);
-  // Can't BER more than available stock
-  if (currentBer + currentTick >= origQty) return;
-  BER_REF.child(key).set({ count: currentBer + 1 });
+  // Allow BER even for parts not in outputRows (e.g. manually added in Completed Today)
+  BER_REF.child(key).set({ count: currentBer + 1, lastUpdated: Date.now() });
 }
 
 function removeBer(partId) {
@@ -1204,9 +1200,9 @@ function searchParts(query) {
   const dropdown = document.getElementById('part-dropdown');
   if (!query || query.length < 1) { dropdown.style.display = 'none'; return; }
   const q = query.toUpperCase();
-  // Search through ALL parts in gradeMap (includes non-DCD parts)
-  const allParts = Object.keys(window.gradeMap || {});
-  const matches = allParts.filter(p => p.includes(q)).slice(0, 30);
+  // Search through ALL parts in gradeMap PLUS any ungraded DCD_PARTS
+  const allParts = new Set([...Object.keys(window.gradeMap || {}), ...DCD_PARTS]);
+  const matches = [...allParts].filter(p => p.includes(q)).slice(0, 30);
   if (matches.length === 0) { dropdown.style.display = 'none'; return; }
   dropdown.innerHTML = '';
   matches.forEach(partId => {
@@ -1578,7 +1574,8 @@ function renderTable() {
     }, 0);
     const usedQty = allTicksForPart + berCount;
     const plusDisabled = origTotalQty <= 0 || usedQty >= origTotalQty;
-    const berPlusDisabled = origTotalQty <= 0 || usedQty >= origTotalQty;
+    // BER + button in Completed Today is never limited by stock - it's a record of completed work
+    const berPlusDisabled = false;
     // Build user tick indicators
     const userIndicators = Object.entries(allUserTicks).map(([uid, userTicks]) => {
       if (!userTicks) return '';

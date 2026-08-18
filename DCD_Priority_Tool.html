@@ -801,6 +801,7 @@ let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, bers = {}, show
 let currentUser = null;
 let filesUploadedAt = 0; // timestamp of last file upload
 let excludedByNote = new Set(); // parts to exclude from priority list
+let manualPartsMap = {}; // key -> {partId, cls, val} for manually-added parts, survives outputRows rebuilds
 let dataLoaded = false;
 let allUserTicks = {}; // all users' ticks for live view
 const USERS = {
@@ -815,7 +816,7 @@ document.getElementById('date-badge').textContent =
 // Firebase listeners started after login — see startFirebaseListeners()
 
 function safeKey(partId) {
-  return partId.replace(/[.#$\[\]]/g, '_');
+  return partId.replace(/[.#$\[\]\/]/g, '_');
 }
 
 // Stock Adjustment
@@ -1235,6 +1236,9 @@ function confirmAddPart(type) {
   const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
   const key = safeKey(selectedPartId);
 
+  // Remember this part permanently (survives outputRows being rebuilt by renderTable)
+  manualPartsMap[key] = { partId: selectedPartId, cls, val };
+
   // Ensure part is in outputRows so saveToHistory can pick it up
   if (!outputRows.find(r => r['Part ID'] === selectedPartId)) {
     outputRows.push({
@@ -1247,11 +1251,11 @@ function confirmAddPart(type) {
   if (type === 'tick') {
     // Only write to TICKS_REF — saveToHistory will handle history automatically
     const currentTick = getTickCount(selectedPartId);
-    TICKS_REF.child(key).set({ count: currentTick + 1 });
+    TICKS_REF.child(key).set({ count: currentTick + 1, lastUpdated: Date.now() });
   } else if (type === 'ber') {
     // Only write to BER_REF — saveToHistory will handle history automatically
     const currentBer = getBerCount(selectedPartId);
-    BER_REF.child(key).set({ count: currentBer + 1 });
+    BER_REF.child(key).set({ count: currentBer + 1, lastUpdated: Date.now() });
   }
 
   closeModal();
@@ -1362,6 +1366,14 @@ function startFirebaseListeners() {
 
   HISTORY_REF.on('value', snap => {
     historyData = snap.val() || {};
+    // Rebuild manualPartsMap from today's history so manually-added parts survive refreshes
+    if (historyData[TODAY]) {
+      Object.entries(historyData[TODAY]).forEach(([key, entry]) => {
+        if (!entry || !entry.partId) return;
+        const cleanKey = key.replace(/^ber_/, '');
+        manualPartsMap[cleanKey] = { partId: entry.partId, cls: entry.cls || '', val: entry.val || 0 };
+      });
+    }
     updateHistoryCount();
     if (currentTab === 'history') renderHistory();
   });
@@ -1708,14 +1720,16 @@ function saveToHistory() {
       return;
     }
     const row = outputRows.find(r => safeKey(r['Part ID']) === key);
-    const cls = row ? (row['Part Class'] || '') : '';
-    const val = row ? (typeof row.Value === 'number' ? row.Value : 0) : 0;
-    const berCount = getBerCount(row ? row['Part ID'] : key);
+    const manual = manualPartsMap[key];
+    const partId = row ? row['Part ID'] : (manual ? manual.partId : key);
+    const cls = row ? (row['Part Class'] || '') : (manual ? manual.cls : '');
+    const val = row ? (typeof row.Value === 'number' ? row.Value : 0) : (manual ? manual.val : 0);
+    const berCount = getBerCount(partId);
     const berEarned = berCount * 0.10;
     dayRef.child(key).transaction(existing => {
       // Only set if not exists, or count has increased
       if (!existing) {
-        return { partId: row ? row['Part ID'] : key, count, cls, val, earned: (val * count) + berEarned, berCount, berEarned, type: 'tick' };
+        return { partId, count, cls, val, earned: (val * count) + berEarned, berCount, berEarned, type: 'tick' };
       }
       // Always sync to current tick count (handles both increases and decreases)
       existing.count = count;
@@ -1736,10 +1750,12 @@ function saveToHistory() {
       return;
     }
     const row = outputRows.find(r => safeKey(r['Part ID']) === key);
-    const cls = row ? (row['Part Class'] || '') : '';
+    const manual = manualPartsMap[key];
+    const partId = row ? row['Part ID'] : (manual ? manual.partId : key);
+    const cls = row ? (row['Part Class'] || '') : (manual ? manual.cls : '');
     dayRef.child('ber_' + key).transaction(existing => {
       if (!existing) {
-        return { partId: row ? row['Part ID'] : key, count: 0, cls, val: 0, earned: berCount * 0.10, berCount, berEarned: berCount * 0.10, type: 'ber' };
+        return { partId, count: 0, cls, val: 0, earned: berCount * 0.10, berCount, berEarned: berCount * 0.10, type: 'ber' };
       }
       existing.berCount = berCount;
       existing.berEarned = berCount * 0.10;
@@ -2581,13 +2597,13 @@ function renderCompleted() {
   tbody.innerHTML = '';
   // Parts from outputRows that have ticks/BERs
   const doneRows = outputRows.filter(r => getTickCount(r['Part ID']) > 0 || getBerCount(r['Part ID']) > 0);
+  const includedPartIds = new Set(doneRows.map(r => r['Part ID']));
 
   // Also include manually added parts from today's history that aren't in outputRows
   if (historyData && historyData[TODAY]) {
-    const outputPartIds = new Set(outputRows.map(r => r['Part ID']));
     Object.values(historyData[TODAY]).forEach(entry => {
       if (!entry || !entry.partId) return;
-      if (outputPartIds.has(entry.partId)) return; // already in list
+      if (includedPartIds.has(entry.partId)) return; // already in list
       if ((entry.count || 0) === 0 && (entry.berCount || 0) === 0) return;
       // Add a synthetic row for this manual part
       doneRows.push({
@@ -2601,8 +2617,24 @@ function renderCompleted() {
         Value: entry.val || 0,
         _manual: true
       });
+      includedPartIds.add(entry.partId);
     });
   }
+
+  // Final safety net: any part with a live tick/BER count not yet included (uses manualPartsMap for correct ID)
+  Object.keys(manualPartsMap).forEach(key => {
+    const m = manualPartsMap[key];
+    if (includedPartIds.has(m.partId)) return;
+    const tickCount = getTickCount(m.partId);
+    const berCount = getBerCount(m.partId);
+    if (tickCount === 0 && berCount === 0) return;
+    doneRows.push({
+      Priority: 2, 'Part ID': m.partId, 'Repair Team': 'Manual',
+      'Rep Req': 0, 'Open Orders': '', 'Total Qty': 0,
+      'Part Class': m.cls || '', Value: m.val || 0, _manual: true
+    });
+    includedPartIds.add(m.partId);
+  });
 
   if (doneRows.length === 0) {
     tbody.innerHTML = '<tr><td colspan="10" class="empty-done">No parts completed yet today</td></tr>';

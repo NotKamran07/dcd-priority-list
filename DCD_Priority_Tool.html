@@ -1465,7 +1465,7 @@ async function loadAll() {
       if (!boMap[id]) boMap[id] = { count: 0, totalQty: 0 };
       boMap[id].count++;
       const qty = Number(r['Qty']) || 0;
-      boMap[id].totalQty += qty;
+      boMap[id].totalQty = Math.max(boMap[id].totalQty, qty); // MAX across rows, not sum (Qty repeats per row)
       if (qty === 0) boZeroQtyParts.add(id); // flag parts with 0 qty
     });
 

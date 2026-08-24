@@ -1476,14 +1476,9 @@ async function loadAll() {
       if (excludedByNote.has(id)) return; // Skip excluded parts
       const bo = boMap[id], pbi = pbiMap[id] || { repReq: 0, totalBad: 0, team: '' };
       const cls = gradeMap[id] || '';
-      // If backorder report explicitly shows qty=0, force 0 regardless of PowerBI
-      // Otherwise use PowerBI Total Bad as it's more accurate
-      let totalQty;
-      if (boZeroQtyParts.has(id)) {
-        totalQty = 0; // backorder says 0 — trust the backorder report
-      } else {
-        totalQty = pbi.totalBad > 0 ? pbi.totalBad : bo.totalQty;
-      }
+      // Backorder report Qty is the primary source of truth for stock quantity.
+      // Only fall back to PowerBI Total Bad if the part isn't on the backorder report at all.
+      let totalQty = bo.totalQty;
       rank1.push({ Priority: 1, 'Part ID': id, 'Repair Team': pbi.team, 'Rep Req': pbi.repReq, 'Open Orders': bo.count, 'Total Qty': totalQty, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
     });
     rank1.sort((a, b) => b['Open Orders'] - a['Open Orders']);

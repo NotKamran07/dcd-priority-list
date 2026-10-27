@@ -341,6 +341,8 @@
   /* Admin Upload */
   #admin-btn { font-family:'Syne',sans-serif; font-weight:700; font-size:0.62rem; letter-spacing:0.05em; text-transform:uppercase; padding:4px 10px; border-radius:20px; cursor:pointer; background:var(--surface2); color:var(--muted); border:1px solid var(--border); transition:all 0.2s; display:none; }
   #admin-btn:hover { color:var(--accent2); border-color:var(--accent2); }
+  #pin-btn { font-family:'Syne',sans-serif; font-weight:700; font-size:0.62rem; letter-spacing:0.05em; text-transform:uppercase; padding:4px 10px; border-radius:20px; cursor:pointer; background:var(--surface2); color:var(--muted); border:1px solid var(--border); transition:all 0.2s; display:none; }
+  #pin-btn:hover { color:var(--accent2); border-color:var(--accent2); }
   #admin-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.7); z-index:3000; align-items:center; justify-content:center; }
   #admin-overlay.open { display:flex; }
   #admin-box { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:1.8rem; width:480px; max-width:95vw; }
@@ -429,6 +431,7 @@
       <span id="active-user-switch">switch</span>
     </div>
     <button id="admin-btn" onclick="openAdmin()">⬆ Upload</button>
+    <button id="pin-btn" onclick="openChangePin()">🔒 PIN</button>
     <div id="theme-toggle" onclick="toggleTheme()">
       <span class="toggle-label" id="theme-label">🌙 Dark</span>
       <div class="toggle-track"><div class="toggle-thumb"></div></div>
@@ -449,6 +452,8 @@
   <div class="stat"><span class="stat-label">Rank 1 — Backorder</span><span class="stat-value r1" id="stat-r1">—</span></div>
   <div class="stat"><span class="stat-label">Rank 2 — PowerBI</span><span class="stat-value r2" id="stat-r2">—</span></div>
   <div class="stat"><span class="stat-label">Total Parts</span><span class="stat-value" id="stat-total">—</span></div>
+  <div class="stat"><span class="stat-label">Total Rep Req</span><span class="stat-value" id="stat-rep-total" style="color:var(--accent2);">—</span></div>
+  <div class="stat"><span class="stat-label">Total Stock</span><span class="stat-value" id="stat-stock-total" style="color:var(--green);">—</span></div>
   <div class="stat"><span class="stat-label">Completed Today</span><span class="stat-value done" id="stat-done">0</span></div>
   <div class="stat"><span class="stat-label">BER Today</span><span class="stat-value" id="stat-ber-today" style="color:#c00000;">0</span></div>
 </div>
@@ -470,6 +475,9 @@
   <button id="refresh-btn" onclick="loadAll()">↻ Refresh</button>
   <button id="reset-btn" onclick="resetTicks()">Reset All Ticks</button>
   <button onclick="openNewPartModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:2px;background:var(--accent2);color:white;border:none;">+ New Part</button>
+  <button id="hidden-btn" onclick="openHiddenModal()" style="display:none;font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--muted);border:1px solid var(--border);">👁 0 hidden</button>
+  <button onclick="openManageModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--text);border:1px solid var(--border);">⚙ Manage Parts</button>
+  <button onclick="downloadBackup()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;letter-spacing:0.05em;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:2px;background:transparent;color:var(--text);border:1px solid var(--border);">⬇ Backup</button>
 
   <div id="print-dropdown-wrap" style="position:relative;display:inline-block;">
     <button class="print-btn" onclick="togglePrintMenu(event)">🖨 Print ▾</button>
@@ -683,9 +691,9 @@
     <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.5rem 0;border-top:1px solid var(--border);margin-bottom:0.75rem;display:flex;align-items:center;gap:0.5rem;">
       <span style="color:#6b6f82;">? Ungraded</span>
       <span id="ungraded-count" style="background:#6b6f82;color:white;font-size:0.6rem;padding:1px 7px;border-radius:10px;"></span>
-      <span style="font-size:0.65rem;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;">— use Recalculate Values to assign grades after updating the grading file</span>
+      <span style="font-size:0.65rem;font-weight:400;color:var(--muted);text-transform:none;letter-spacing:0;">— pick a grade to assign it to every matching entry</span>
     </div>
-    <table style="width:100%;border-collapse:collapse;font-size:0.72rem;opacity:0.7;">
+    <table style="width:100%;border-collapse:collapse;font-size:0.72rem;">
       <thead>
         <tr style="background:var(--surface2);border-bottom:1px solid var(--border);">
           <th style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--muted);padding:0.5rem 0.8rem;text-align:left;">Date</th>
@@ -800,11 +808,15 @@ let HISTORY_REF = null;
 let ALL_TICKS_REF = db.ref(`allTicks/${TODAY}`); // combined ticks for live view
 
 const DCD_PARTS = new Set(["AAH-SCN-HR2280-HH","ADP-BT-SPLIT-LIDL","ADP-CCTV-RG59-BNC","ADP-ISC-QMS","AP-UNIFI-NANO-HD","ASW-AP-CIS-MER-CW9162","ASW-AP-CIS-MER-MR44","ASW-CAB-WIN-BA92","ASW-CAM-MOT-VB400V3","ASW-CHG-DOCK-VB400","ASW-CON-CASE-TC26","ASW-CON-SCR-PROT-TC26","ASW-DOCK-CON-DC200","ASW-HHT-ZEB-TC22","ASW-HHT-ZEB-TC27","ASW-HHT-ZEBRA-TC26","ASW-IPAD-GEN9-64GB","ASW-IPAD-RUGGED-CASE","ASW-PHONE-YEALINK-W73P","ASW-SCN-DAT-QD2450","ASW-SCN-MAG-1500I","ASW-SCN-NLSHR3280-PHM","ASW-ZEB-TC52-HHT","ASW-ZEB-TC52-HHT-DC","ATM-32-LGT-BD-MK2","ATM-32-REAR-FAN","ATT-WAIT-LOCK-BA83","BEA-PSU-VER-VX680","BG-SCN-OXH-BC361","BOA-SCN-DAT-3200VSI","BOA-SCN-DAT-3300HSI","CAB-CBNA-UO1-S07ZA","CAB-DAT-EAS","CAB-DIGI-CAB65200","CAB-DPORT-DPORT","CAB-HHP-XEN-1900-USB","CAB-HON-1450G","CAB-HON-7120-USB","CAB-HR2260-USB","CAB-MET-STD-RS232","CAB-MOT-U21-S07ZAR","CAB-SCN-9800-12V-USB","CAB-SCN-DATA-RS232","CAB-SCN-MAG-1500I","CAB-SYM-25-32469-20","CAB-SYM-DS4208","CAB-SYM-STI85-0200","CAM-BOBA-CAM-GRY","CAM-BOBA-CAMERA","CAM-BOBA-SENSOR","CC-SCN-ZEB-DS2208","CCTV-PSU-24V","CDR-ANK-08512-INSERT","CDR-DIG-EC410-INSERT","CDR-FT-EUMOD460-INS","CDR-FT-MOD460-INSERT","CDR-J2-INSERT","CDR-MAT-EP107-INSERT","CDR-MSC5099-INSERT","CDR-SL2000-INSERT","CDR-STD2000-INSERT","CDR-TEC-51A-INSERT","CEC-CAB-521-USB-BLK","CEC-CAB-PWR-KET-STD","CEC-CRA-HHT-5SLOT-TC51","CEC-CRA-HHT-ZEB-TC51","CEC-HHT-ZEB-TC51","CEC-PSU-KRO-TIME-CLO","CEC-PSU-M900-65W","CEC-PSU-M900-90W","CEC-PSU-VER-P400","CEC-PTR-AVERY-9417","CEC-PTR-AVERY-9418","CEC-PTR-PAXAR-9486","CEC-SCN-STAND","CEC-STD-FP-READER","CEC-TAB-ZEB-ET40-10IN","CLK-IPAD-10-64GB","CLK-IPHONE-14-128GB","CLK-PHONE-YL-W56H","CLK-PSU-APG-CDR","CLK-PSU-CIS-MX68","CLK-PSU-PS170","CON-CDR-3S-423-INS","CON-MO-USB-BLK","CON-PC-EPS-IM700-SCR","CON-POLE-YUNO-CW","CON-SPACE-2POLE","CON-VER-P400-MGRP-BLK","CRA-SYM-MC3000-USB","CRA-TOSH-TEC-EP800","CRA-VOC-CR-RK-S5","CRA-VOC-S5-REG","CRA-VOC-S5-STD","CRA-ZEB-TC57-LID","CRA-ZEB-TC58-LID","FH-AP-MER-MR33","HBS-SCN-HON-1450G","HOB-CRA-CAS-S1F2-BASE","HOB-PSU-VER-V400M","HSM-POS-SCANNER","HTS-DS-ALL-WS37HD8","HTS-DS-AND-PPCNET-D","HTS-SCN-HON-BO","HTS-SCN-HON-POS","HWS-ITSU-240-PED-PSU","HWS-ITSU-FLY-MON-PSU","HWS-KBD-MOU-WIRELESS","HWS-PZH-12V-150W-12.5A-PSU","HWS-PZH-12V-7AMP-CLO22-PSU","HWS-PZH-AP-DRAY-1060","HWS-PZH-AP-DRAY-912C","HWS-PZH-CAB-EURO-ELKTX","HWS-PZH-CHRM-BK-N23-PSU","HWS-PZH-PSU-LEN","KBD-ACC-5010","KBD-ACC-596-MINI","KBD-ACC-KYB500-K82B","KBD-ACK-540RF","KBD-AKE-OCU-741","KBD-CHY-GB81-MY700","KBD-CHY-SPOS-G86-624","KBD-HP-FK218AA","KBD-KEY-ACK-340-PS2","KBD-MOU-HP-230","KBD-MOU-HP-235","KBD-PS2-MINI-BLK","KBD-USB-BLK","KBD-USB-MINI-BLK","KBD-USB-MINI-CRM","LIB-SCN-HON-XEN-1950","LID-ADP-ISC-QMS","LID-CIS-ATA-192","LID-CRA-DESK-UTMB5","LID-CRA-PAN-UTMB5","LID-FREDERIX-HOTSPOT","LID-PAN-MNT-UTMB5","LID-SMC-ISC-V2.1","LID-SU-AP-HUA-5760-51","LID-TAB-PAN-UTMB5","LYD-AAH-PAP-BRO-HL6400DW","LYD-AAH-TRAY-BRO-LT6505","LYD-E-CAB-U21-S07ZAR","LYD-E-CDU-HP-LD220","LYD-E-CRA-8800-HHT","LYD-E-CRA-SYM-MC3190","LYD-E-KBD-ACK-540U","LYD-E-PSU-8800-HHT","LYD-E-SCN-MOT-DS9208","MCD-BAT-QUA-PRO9","MCD-BSE-NEX-7000-KIT","MCD-BSE-QUA-DT","MCD-BSE-QUA-DUAL-V2","MCD-CAB-PWR-SPLIT-DTSV2","MCD-CASE-NEX-7007","MCD-DOCK-QUA-8PORT","MCD-DT-AU-3M-BSE-5.20X2-KIT","MCD-DT-AU-3M-BSE-526-KIT","MCD-DT-AU-3M-BSE-KIT","MCD-DT-AU-3M-BSE-KIT-HS","MCD-DT-AU-3M-PAR-G5SPK-KIT","MCD-DT-AU-3M-SPK-MIC-KIT","MCD-DT-AU-3M-VENBSE-KIT","MCD-DT-AU-HME-BAT-KIT","MCD-DT-AU-HME-BSE6200-KIT","MCD-DT-AU-HME-MIC-KIT","MCD-DT-AU-HME-PCB-6200","MCD-DT-AU-HME-SPK-KIT","MCD-DT-AU-PAR-G5PLUS-KIT","MCD-DT-AU-PCB-LOOPCARD","MCD-DT-GATEWAY-DX80-KIT","MCD-DT-PUCK-DX80-KIT","MCD-DT-QUAIL-EXTBOX","MCD-DT-RGAGE-RADR-KIT","MCD-DT-SOTEC-CLOUD-KIT","MCD-HDSET-3M-KIT","MCD-HEAD-3M-12SLOT-CHARGER","MCD-HEAD-3M-CHARGER","MCD-HME-FOAM","MCD-HSET-QUA","MCD-KIT-HSET-HS6200","MCD-KIT-NEX-HSET-7002","MCD-KSK-EURO-SCN-MX101-KIT","MCD-KSK-EVOK-SCANCASE-KIT","MCD-KSK-EVOK-SCN-4400-KIT","MCD-KSK-NGK-SCN-N5680-KIT","MCD-MIC-QUA","MCD-NEX-BAT-DOCK","MCD-PUCK-DHOUS-KIT","MCD-PUCK-DTSV2-KIT","MCD-RADR-DTSV2-KIT","MCD-RPTR-QUA","MCD-SCN-ACR-NGK27-KIT","MCD-SCN-DS547-4407-3207","MCD-SCN-ZEB-MD27-KIT","MCD-SPK-NEX-7000","MCD-SPK-QUA","MCD-TRANS-NEX-7000","MED-INTEL-STICK","MNT-DBLD-SCO","MOD-DYNALINK-56K-PCI","MW-SCN-HP-6Y2V4AA","NAN-DS-HKV-DS-D60C-B","NAN-DS-INT-STK1AW32SC","NHS-SCN-DAT-QD2430","NT-BAT-DELL-LAT-5175","NT-BAT-DELL-VEN11","NT-BAT-R11-DUR","NT-DOCK-DELL","NT-DOCK-DURABOOK-R11","NT-DURABOOK-PSU","NT-PSU-DELL-DOCK","NT-PSU-PS-180","NWK-VOC-BSE-STN","NXT-CAB-HON-7580G-USB","NXT-CRA-HON-1902H","NXT-SCN-HON-1902","NXT-SCN-HON-USB-7580G","NXT-SCN-ZEB-RFD8500","ODE-BAT-APC-SMX3000","ODE-CAB-LED-10SQ","ODE-DOCK-HDD-TS-231P","ODE-DOCK-QN-TS431XEU","OFC-SCN-CIP-1100","OFC-SCN-DAT-HD3130","OST-BAT-ZEB-TC52-PKR","OST-CDR-INSERT-DGRY","OST-CRA-HHT-ZEB-TC51","OST-CRA-ZEB-TC52-HHT","OST-CRA-ZEB-TC52-PKR","OST-CRA-ZEB-TC53E","OST-HHT-ZEB-TC51","OST-HHT-ZEB-TC52","OST-HHT-ZEB-TC52-PKR","OST-HHT-ZEB-TC53E","OST-HHT-ZEB-TC77-WH","OST-PSU-CRA-HHT","OST-PTR-HP-TRAY2","OST-SCN-ZEB-RS5000X-WH","OST-TAB-ZEB-WT6400-WH","PAD-BPS-GAS-STRUT","PAD-BPS-SWITCH-DOOR","PAD-NV200-NOTE-READER-BPS","PAD-PHONE-YEALINK-W53P","PAD-SCN-GEWE-FM3080","PAD-SCN-HON-MS9520","PAD-SCN-NLS-FM100","PAD-SCN-NLS-FM3051","PAD-SCN-NLS-FM3080","PH8-SCN-MOT-DS9208","PHONE-BT-DUET-210","PLP-HON-SCN-HF561SR","PS-USA-POS-SCAN-BDL","RI-CAB-SCN-DS8108","RI-SCN-ZEB-DS8108","RI-SCO-ELO-SCANNER2D","RI-SCO-KEONN-ADVANGO","RI-SCO-KEONN-ADVANPAY-120","SCN-CAN-LIDE110","SCN-DAT-3300-MUL","SCN-DAT-GFS4400","SCN-DAT-MAG-8001","SCN-DATA-3450VSI","SCN-DOC-CAN-LIDE300","SCN-DOR-HR2260-HOLDER","SCN-DORA-HR2300-2D","SCN-DORADA-HR2260-2D","SCN-HHP-1300G","SCN-HHP-3800G04E","SCN-HHP-XEN-1900-USB","SCN-HON-MS9540-USB","SCN-HP-1RL97AA","SCN-HP-BW868AA","SCN-HP-BW868AA-STND","SCN-HP-ENG-1-STND","SCN-MAG-1500I-BLK","SCN-MAG-M1500-I","SCN-MET-3780-USB-BLK","SCN-MET-7120-RS2-BLK","SCN-MET-7120-USB-BLK","SCN-MET-9520-KBW-BLK","SCN-MET-9520-KBW-CRM","SCN-MET-9520-USB-BLK","SCN-MET-9520-USB-CRM","SCN-MET-9540-USB-BLK","SCN-MET-QUANTUM-USB","SCN-MOT-DS4308-USB","SCN-MOT-DS457-USB","SCN-MOT-DS9208-USB","SCN-QUANTUM-STAND","SCN-SU-SYM-LS9208-LON","SCN-SYM-DS4208","SCN-SYM-LS9100-400BC","SCN-SYM-LS9208-LON","SCN-UNI-MS320-1G","SCN-ZEB-DS9208-BLK","SCN-ZEB-DS9308-USB","SDR-SCN-ZEB-RFD8500","SDR-TAB-IPHONE-SE","SDR-TAB-IPOD-TCH","SDR-ZEB-CHG-CRA","SDY-SCN-RFID","SEL-CAB-CRA-M-INT433","SEL-CRA-DAT-M-INT433","SEL-SCN-DAT-PM9500","SEL-SCN-DAT-PM9501","SEL-SCN-DS4208-USB","SEL-SCN-MET-9540-USB","SHO-SCN-DS9208-USB","SIG-CRA-VX680","SPK-VOC-HDSET-S5","SUP-CAB-NLSHR22-USB","SUP-HHT-ZEBRA-TC26-PSL","SUP-SCN-HHT-ZEB-TC51","SUP-SU-SCN-DS9208-EAS","SVR-VOC-CTRLR","THR-BAT-SYM-CS4070","THR-CAB-IPAD-CHARGE-BLK","THR-CAB-SYM-CS4070","THR-CAB-ZEB-CS4070","THR-CON-CS4070-LANYARD","THR-DOCK-CHARGE-6080","THR-DOCK-CHARGE-CS4070","THR-DOCK-CHG-CUP-6080","THR-IPAD-AIR-4TH","THR-IPAD-RUGGED-CASE","THR-SCN-SYM-CS4070","THR-SCN-ZEB-CS6080","TPRG-SCN-DS2208-SR","TPS-CAB-SCN-DS9308","TPS-CRA-TC51","TPS-SCN-DS9208-SR2D","TPS-SCN-ZEB-DS9308","TRG-BAT-ZEB-HHT","TRG-CASE-SAM-A8-10.5IN","TRG-CRA-SYM-MC40-5SLOT","TRG-CRA-VX680","TRG-CRA-ZEB-BAT-4SLOT","TRG-CRA-ZEB-HHT-BAT-4SLOT","TRG-CRA-ZEB-TC52-5SLOT","TRG-HHT-ZEB-TC22","TRG-HHT-ZEB-TC52","TRG-MON-HP-E22-G5-22IN","TRG-PHONE-BT-DECT","TRG-SCN-SYM-DS9208","TRG-SCN-ZEB-DS9308","TRG-TAB-IPAD-MINI-A2124","TRG-TAB-IPAD-MINI-A2133","TRG-TAB-IPAD-MINI-A2567","TRG-TAB-IPAD-MINI-A2993","TRG-TAB-IPAD-MINI2","TRG-TAB-IPAD7-A2197","TRG-TAB-IPAD9-A2602","TRG-TAB-IPOD-TCH-6GEN","TRG-TAB-SAM-A8","TRG-TAB-SAM-A9-PLUS-64","TUI-LAP-DELL-WD19-DOCK","WHI-SCN-SYM-DS9208-USB","WHIT-MNT-TAB-DFWC-KIT","WHIT-SCN-WINCOR","WHIT-TAB-CSE-LEN-M10","WHIT-TAB-LEN-M10","YC-SCN-DS9208","YC-SCN-ZEB-DS9308","WAGA-HHT-ZEB-TC22","CEC-HHT-ZEB-TC27","LID-CHRG-CUP-ZEB-TC58"]);
+const DCD_DEFAULTS = [...DCD_PARTS];            // built-in list: used once to seed Firebase
+const DCD_DEFAULT_SET = new Set(DCD_DEFAULTS);
+const DCD_PARTS_REF = db.ref('dcdParts');       // live DCD list (editable from Manage Parts)
 
 let outputRows = [], sortCol = null, sortAsc = true, ticks = {}, bers = {}, showDone = true, deptFilter = 'all', currentTab = 'main';
 let currentUser = null;
 let filesUploadedAt = 0; // timestamp of last file upload
 let excludedByNote = new Set(); // parts to exclude from priority list
+let hiddenParts = []; // DCD parts hidden by the backorder keyword filter, with reasons
 let manualPartsMap = {}; // key -> {partId, cls, val} for manually-added parts, survives outputRows rebuilds
 let dataLoaded = false;
 let allUserTicks = {}; // all users' ticks for live view
@@ -876,6 +888,305 @@ function confirmAdjust(action) {
   closeAdjustModal();
 }
 
+// ── PIN lock ─────────────────────────────────────────────────────────────────
+// A soft lock to keep work and earnings private on a shared screen. The unlock lasts until the
+// browser is closed or the date changes (whichever comes first).
+let pinMode = 'enter';   // 'enter' | 'create' | 'change'
+let pinUser = null;
+let pinStoredHash = null;
+
+function localDateStr() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
+function isUnlocked(userId) {
+  const today = localDateStr();
+  try { if (sessionStorage.getItem('dcdUnlock_' + userId) === today) return true; } catch (e) {}
+  return document.cookie.split('; ').some(c => c === 'dcdUnlock_' + userId + '=' + today);
+}
+
+function setUnlocked(userId) {
+  const today = localDateStr();
+  try { sessionStorage.setItem('dcdUnlock_' + userId, today); } catch (e) {}
+  // No expiry set = session cookie, which is cleared when the browser is fully closed
+  document.cookie = 'dcdUnlock_' + userId + '=' + today + '; SameSite=Strict';
+}
+
+async function hashPin(userId, pin) {
+  const text = 'dcd-pin|' + userId + '|' + pin;
+  if (window.crypto && crypto.subtle) {
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+  }
+  let h1 = 5381, h2 = 52711;   // fallback for browsers without crypto.subtle
+  for (let i = 0; i < text.length; i++) {
+    const c = text.charCodeAt(i);
+    h1 = ((h1 * 33) ^ c) >>> 0;
+    h2 = ((h2 * 33) ^ c) >>> 0;
+  }
+  return 'f' + h1.toString(16) + h2.toString(16);
+}
+
+async function startPinFlow(userId) {
+  pinUser = userId;
+  try {
+    const snap = await db.ref('userPins/' + userId).once('value');
+    const v = snap.val();
+    pinStoredHash = v && v.hash ? v.hash : null;
+  } catch (e) {
+    alert('Could not reach the database to check your PIN. Check your connection and try again.');
+    return;
+  }
+  showPinModal(pinStoredHash ? 'enter' : 'create');
+}
+
+function showPinModal(mode) {
+  pinMode = mode;
+  const name = USERS[pinUser] ? USERS[pinUser].name : '';
+  const show = (id, on) => { document.getElementById(id).style.display = on ? 'block' : 'none'; };
+  document.getElementById('pin-title').textContent = mode === 'enter' ? 'Enter your PIN' : (mode === 'create' ? 'Create a PIN' : 'Change PIN');
+  document.getElementById('pin-sub').textContent = mode === 'enter'
+    ? name + ' — enter your PIN to continue.'
+    : (mode === 'create'
+        ? name + ' — choose a 4–6 digit PIN. You will only be asked again after closing the browser or on a new day.'
+        : 'Enter your current PIN, then choose a new one.');
+  show('pin-current', mode === 'change');
+  show('pin-confirm', mode !== 'enter');
+  document.getElementById('pin-input').placeholder = mode === 'enter' ? 'PIN' : 'New PIN (4–6 digits)';
+  ['pin-current', 'pin-input', 'pin-confirm'].forEach(id => { document.getElementById(id).value = ''; });
+  document.getElementById('pin-error').style.display = 'none';
+  document.getElementById('pin-submit').textContent = mode === 'enter' ? 'Unlock' : 'Save PIN';
+  document.getElementById('pin-overlay').style.display = 'flex';
+  setTimeout(() => document.getElementById(mode === 'change' ? 'pin-current' : 'pin-input').focus(), 100);
+}
+
+function closePinModal() {
+  document.getElementById('pin-overlay').style.display = 'none';
+}
+
+async function openChangePin() {
+  if (!currentUser) return;
+  pinUser = currentUser;
+  try {
+    const snap = await db.ref('userPins/' + pinUser).once('value');
+    const v = snap.val();
+    pinStoredHash = v && v.hash ? v.hash : null;
+  } catch (e) { alert('Could not reach the database. Try again.'); return; }
+  showPinModal(pinStoredHash ? 'change' : 'create');
+}
+
+function finishUnlock() {
+  const u = pinUser;
+  setUnlocked(u);
+  closePinModal();
+  if (currentUser !== u) loginAs(u);   // already signed in = just changed/created a PIN
+}
+
+async function submitPin() {
+  const err = msg => {
+    const e = document.getElementById('pin-error');
+    e.textContent = msg;
+    e.style.display = 'block';
+  };
+  const valid = /^[0-9]{4,6}$/;
+  const pin = document.getElementById('pin-input').value.trim();
+  const confirmPin = document.getElementById('pin-confirm').value.trim();
+  try {
+    if (pinMode === 'enter') {
+      if (!valid.test(pin)) return err('Enter your 4–6 digit PIN.');
+      if (await hashPin(pinUser, pin) !== pinStoredHash) {
+        document.getElementById('pin-input').value = '';
+        return err('Incorrect PIN.');
+      }
+      finishUnlock();
+      return;
+    }
+    if (pinMode === 'change') {
+      const cur = document.getElementById('pin-current').value.trim();
+      if (await hashPin(pinUser, cur) !== pinStoredHash) return err('Current PIN is incorrect.');
+    }
+    if (!valid.test(pin)) return err('PIN must be 4–6 digits.');
+    if (pin !== confirmPin) return err('PINs do not match.');
+    const newHash = await hashPin(pinUser, pin);
+    await db.ref('userPins/' + pinUser).set({ hash: newHash, setAt: Date.now() });
+    pinStoredHash = newHash;
+    const wasChange = pinMode === 'change';
+    finishUnlock();
+    if (wasChange) alert('PIN changed.');
+  } catch (e) {
+    err('Something went wrong: ' + e.message);
+  }
+}
+
+// ── Manage parts / hidden parts / backup ─────────────────────────────────────
+let reloadTimer = null;
+function scheduleReload() {
+  clearTimeout(reloadTimer);
+  reloadTimer = setTimeout(() => loadAll(), 700);
+}
+
+function escAttr(s) {
+  return String(s).split('&').join('&amp;').split('"').join('&quot;').split('<').join('&lt;');
+}
+
+function setDCD(partId, on) {
+  const key = safeKey(partId);
+  if (on) { DCD_PARTS.add(partId); DCD_PARTS_REF.child(key).set(partId); }
+  else { DCD_PARTS.delete(partId); DCD_PARTS_REF.child(key).remove(); }
+  if (customParts[key]) {
+    customParts[key].isDCD = on;
+    CUSTOM_PARTS_REF.child(key).update({ isDCD: on });
+  }
+  scheduleReload();
+}
+
+// Give ungraded history entries for this part the new grade (this user's history)
+function applyGradeToHistory(partId, grade) {
+  if (!HISTORY_REF || !grade) return;
+  const known = ['X', 'S', 'C', 'B', 'A', 'M'];
+  const val = typeof GRADE_VALUE[grade] === 'number' ? GRADE_VALUE[grade] : 0;
+  Object.keys(historyData || {}).forEach(date => {
+    const day = historyData[date];
+    if (!day || date === '_meta') return;
+    Object.keys(day).forEach(key => {
+      const e = day[key];
+      if (!e || e.partId !== partId) return;
+      if (known.includes((e.cls || '').toUpperCase())) return; // already graded
+      const earned = (val * (e.count || 0)) + (e.berCount || 0) * 0.10;
+      HISTORY_REF.child(date).child(key).update({ cls: grade, val, earned });
+    });
+  });
+}
+
+function setPartGrade(partId, grade) {
+  const key = safeKey(partId);
+  window.gradeMap = window.gradeMap || {};
+  if (grade) window.gradeMap[partId] = grade; else delete window.gradeMap[partId];
+  const entry = {
+    partId, grade: grade || '', isDCD: DCD_PARTS.has(partId),
+    addedAt: (customParts[key] && customParts[key].addedAt) || Date.now()
+  };
+  customParts[key] = entry;
+  CUSTOM_PARTS_REF.child(key).set(entry);
+  applyGradeToHistory(partId, grade);
+  scheduleReload();
+}
+
+function gradeFromUngraded(sel) {
+  if (!sel.value) return;
+  setPartGrade(sel.dataset.pid, sel.value);
+}
+
+function openManageModal() {
+  document.getElementById('manage-search').value = '';
+  document.getElementById('manage-overlay').style.display = 'flex';
+  renderManageList();
+  setTimeout(() => document.getElementById('manage-search').focus(), 100);
+}
+
+function closeManageModal() {
+  document.getElementById('manage-overlay').style.display = 'none';
+}
+
+function renderManageList() {
+  const q = (document.getElementById('manage-search').value || '').trim().toUpperCase();
+  const customKeys = new Set(Object.keys(customParts));
+  const pool = new Set([...DCD_PARTS, ...Object.values(customParts).map(cp => cp.partId).filter(Boolean)]);
+  if (q) Object.keys(window.gradeMap || {}).forEach(p => pool.add(p)); // search can also find non-DCD graded parts
+  let list = [...pool].sort();
+  if (q) list = list.filter(p => p.includes(q));
+  const total = list.length;
+  list = list.slice(0, 80);
+  const cell = 'padding:0.35rem 0.5rem;border-bottom:1px solid var(--border);';
+  const selStyle = 'background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:0.72rem;padding:2px 4px;';
+  let h = '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;"><thead><tr style="color:var(--muted);text-transform:uppercase;font-size:0.6rem;letter-spacing:0.06em;">'
+    + '<th style="text-align:left;padding:0.35rem 0.5rem;">Part ID</th><th style="padding:0.35rem 0.5rem;">Grade</th>'
+    + '<th style="padding:0.35rem 0.5rem;">DCD</th><th style="padding:0.35rem 0.5rem;"></th></tr></thead><tbody>';
+  list.forEach(p => {
+    const gr = (window.gradeMap || {})[p] || '';
+    const pa = escAttr(p);
+    const opts = ['', 'X', 'S', 'C', 'B', 'A', 'M'].map(g =>
+      '<option value="' + g + '"' + (g === gr ? ' selected' : '') + '>' + (g || '—') + '</option>').join('');
+    h += '<tr>'
+      + '<td style="' + cell + 'font-family:IBM Plex Mono,monospace;">' + pa + '</td>'
+      + '<td style="' + cell + 'text-align:center;"><select data-pid="' + pa + '" onchange="manageGradeChange(this)" style="' + selStyle + '">' + opts + '</select></td>'
+      + '<td style="' + cell + 'text-align:center;"><input type="checkbox" data-pid="' + pa + '" onchange="manageDcdChange(this)"' + (DCD_PARTS.has(p) ? ' checked' : '') + '/></td>'
+      + '<td style="' + cell + 'text-align:right;">' + (customKeys.has(safeKey(p))
+          ? '<button data-pid="' + pa + '" onclick="manageDeleteCustom(this)" style="font-size:0.65rem;padding:2px 8px;cursor:pointer;border-radius:3px;background:transparent;color:var(--accent);border:1px solid var(--accent);">Delete custom</button>'
+          : '') + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  if (!list.length) h = '<div style="padding:1rem;color:var(--muted);font-size:0.75rem;">No matching parts.</div>';
+  document.getElementById('manage-list').innerHTML = h;
+  document.getElementById('manage-count').textContent = total > 80 ? ('Showing 80 of ' + total + ' — type to narrow down') : (total + ' part' + (total === 1 ? '' : 's'));
+}
+
+function manageGradeChange(sel) { setPartGrade(sel.dataset.pid, sel.value); }
+function manageDcdChange(cb) { setDCD(cb.dataset.pid, cb.checked); }
+
+function manageDeleteCustom(btn) {
+  const pid = btn.dataset.pid;
+  const builtIn = DCD_DEFAULT_SET.has(pid);
+  if (!confirm('Delete the custom entry for ' + pid + '? Its grade override is removed' + (builtIn ? '.' : ' and it is taken off the DCD list.'))) return;
+  const key = safeKey(pid);
+  CUSTOM_PARTS_REF.child(key).remove();
+  delete customParts[key];
+  if (!builtIn) { DCD_PARTS.delete(pid); DCD_PARTS_REF.child(key).remove(); }
+  scheduleReload();
+  renderManageList();
+}
+
+function updateHiddenBtn() {
+  const b = document.getElementById('hidden-btn');
+  if (!b) return;
+  b.style.display = hiddenParts.length ? 'inline-block' : 'none';
+  b.textContent = '👁 ' + hiddenParts.length + ' hidden';
+}
+
+function openHiddenModal() {
+  const cell = 'padding:0.4rem 0.6rem;border-bottom:1px solid var(--border);';
+  let h = '<table style="width:100%;border-collapse:collapse;font-size:0.72rem;"><thead><tr style="color:var(--muted);text-transform:uppercase;font-size:0.6rem;letter-spacing:0.06em;">'
+    + '<th style="text-align:left;padding:0.4rem 0.6rem;">Part ID</th><th style="padding:0.4rem 0.6rem;">Calls</th><th style="text-align:left;padding:0.4rem 0.6rem;">Why hidden</th></tr></thead><tbody>';
+  hiddenParts.forEach(p => {
+    h += '<tr><td style="' + cell + 'font-family:IBM Plex Mono,monospace;">' + escAttr(p.id) + '</td>'
+      + '<td style="' + cell + 'text-align:center;">' + p.calls + '</td>'
+      + '<td style="' + cell + '">' + escAttr(p.reasons.join(', ')) + '</td></tr>';
+  });
+  h += '</tbody></table>';
+  if (!hiddenParts.length) h = '<div style="padding:1rem;color:var(--muted);font-size:0.75rem;">Nothing is hidden by the keyword filter.</div>';
+  document.getElementById('hidden-list').innerHTML = h;
+  document.getElementById('hidden-overlay').style.display = 'flex';
+}
+
+function closeHiddenModal() {
+  document.getElementById('hidden-overlay').style.display = 'none';
+}
+
+async function downloadBackup() {
+  try {
+    const snap = await db.ref().once('value');
+    const data = snap.val() || {};
+    const reportFiles = data.files ? Object.keys(data.files) : [];
+    delete data.files; // daily PowerBI/backorder/grading uploads are large and can simply be re-uploaded
+    delete data.userPins; // keep PIN hashes out of backup files
+    data._backupInfo = { createdAt: new Date().toISOString(), excluded: (reportFiles.length ? 'files (' + reportFiles.join(', ') + '), ' : '') + 'userPins' };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const d = new Date();
+    const pad = n => String(n).padStart(2, '0');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'dcd-backup-' + d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + '-' + pad(d.getHours()) + pad(d.getMinutes()) + '.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  } catch (err) {
+    alert('Backup failed: ' + err.message);
+  }
+}
+
 // New Part (add ungraded/graded parts directly via the web app)
 function openNewPartModal() {
   document.getElementById('newpart-id-input').value = '';
@@ -924,17 +1235,13 @@ function saveNewPart() {
 function addTick(partId) {
   const key = safeKey(partId);
   const current = (ticks[key] && typeof ticks[key] === 'object') ? (ticks[key].count || 0) : 0;
-  TICKS_REF.child(key).set({ count: current + 1 });
+  TICKS_REF.child(key).transaction(t => nextEntry(t, 1));
 }
 
 function removeTick(partId) {
   const key = safeKey(partId);
   const current = (ticks[key] && typeof ticks[key] === 'object') ? (ticks[key].count || 0) : 0;
-  if (current <= 1) {
-    TICKS_REF.child(key).remove();
-  } else {
-    TICKS_REF.child(key).set({ count: current - 1, lastUpdated: Date.now() });
-  }
+  TICKS_REF.child(key).transaction(t => nextEntry(t, -1));
 }
 
 // Raw tick count — all ticks for today (for display/history)
@@ -948,14 +1255,7 @@ function getTickCount(partId) {
 
 // Filtered tick count — only post-upload ticks (for quantity calculations)
 function getFilteredTickCount(partId) {
-  const key = safeKey(partId);
-  const tick = ticks[key];
-  if (!tick) return 0;
-  if (typeof tick === 'object') {
-    if (filesUploadedAt > 0 && (!tick.lastUpdated || tick.lastUpdated <= filesUploadedAt)) return 0;
-    return tick.count || 0;
-  }
-  return tick ? 1 : 0;
+  return entryPostCount(ticks[safeKey(partId)]);
 }
 
 // Raw BER count — all BERs for today (for display/history)
@@ -969,32 +1269,21 @@ function getBerCount(partId) {
 
 // Filtered BER count — only post-upload BERs (for quantity calculations)
 function getFilteredBerCount(partId) {
-  const key = safeKey(partId);
-  const ber = bers[key];
-  if (!ber) return 0;
-  if (typeof ber === 'object') {
-    if (filesUploadedAt > 0 && (!ber.lastUpdated || ber.lastUpdated <= filesUploadedAt)) return 0;
-    return ber.count || 0;
-  }
-  return 0;
+  return entryPostCount(bers[safeKey(partId)]);
 }
 
 function addBer(partId) {
   const key = safeKey(partId);
   const currentBer = getBerCount(partId);
   // Allow BER even for parts not in outputRows (e.g. manually added in Completed Today)
-  BER_REF.child(key).set({ count: currentBer + 1, lastUpdated: Date.now() });
+  BER_REF.child(key).transaction(b => nextEntry(b, 1));
 }
 
 function removeBer(partId) {
   const key = safeKey(partId);
   const current = getBerCount(partId);
   if (current <= 0) return;
-  if (current === 1) {
-    BER_REF.child(key).remove();
-  } else {
-    BER_REF.child(key).set({ count: current - 1 });
-  }
+  BER_REF.child(key).transaction(b => nextEntry(b, -1));
 }
 
 function getAllUserTickCount(partId) {
@@ -1009,10 +1298,44 @@ function getAllUserTickCount(partId) {
   return total;
 }
 
+// Each tick/BER entry is {count, pre, lastUpdated}. 'pre' = how many of 'count' were already
+// done when the latest PowerBI/backorder upload happened, so only newer work affects quantities.
+function entryPostCount(t) {
+  if (!t) return 0;
+  if (typeof t !== 'object') return filesUploadedAt > 0 ? 0 : 1;   // legacy true/false tick
+  if (filesUploadedAt > 0 && (!t.lastUpdated || t.lastUpdated <= filesUploadedAt)) return 0;
+  return Math.max(0, (t.count || 0) - (t.pre || 0));
+}
+
+// Next stored value for an entry after adding (delta > 0) or removing (delta < 0) work. null = delete.
+function nextEntry(old, delta) {
+  const isObj = old && typeof old === 'object';
+  const oldCount = isObj ? (old.count || 0) : (old ? 1 : 0);
+  const wasPre = filesUploadedAt > 0 && (!isObj || !old.lastUpdated || old.lastUpdated <= filesUploadedAt);
+  let pre = wasPre ? oldCount : (isObj ? (old.pre || 0) : 0);
+  const count = Math.max(0, oldCount + delta);
+  if (pre > count) pre = count;
+  if (count <= 0) return null;
+  return { count, pre, lastUpdated: Date.now() };
+}
+
+// Ticks from all users, ignoring anything done before the latest PowerBI/backorder upload
+function getFilteredAllUserTickCount(partId) {
+  const key = safeKey(partId);
+  let total = 0;
+  Object.values(allUserTicks).forEach(userTicks => {
+    if (userTicks) total += entryPostCount(userTicks[key]);
+  });
+  return total;
+}
+
 function getEffectiveRow(row) {
-  const myTickCount = getTickCount(row['Part ID']);
-  const allTickCount = getAllUserTickCount(row['Part ID']); // all users combined
-  const berCount = getBerCount(row['Part ID']);
+  const myTickCount = getTickCount(row['Part ID']);               // raw, for display
+  const rawAllTickCount = getAllUserTickCount(row['Part ID']);    // raw, for display
+  const rawBerCount = getBerCount(row['Part ID']);                // raw, for display
+  // Quantity maths ignores work done before the latest PowerBI/backorder upload
+  const allTickCount = getFilteredAllUserTickCount(row['Part ID']);
+  const berCount = getFilteredBerCount(row['Part ID']);
   const manualAdj = stockAdjustments[safeKey(row['Part ID'])] || 0; // manual stock adjustment
 
   const origOpenOrders = typeof row['Open Orders'] === 'number' ? row['Open Orders'] : 0;
@@ -1049,7 +1372,7 @@ function getEffectiveRow(row) {
 
   const fullyDone = row.Priority === 1 ? effOpenOrders === 0 : effRepReq === 0;
 
-  return { ...row, 'Open Orders': effOpenOrders, 'Total Qty': newTotalQty, 'Rep Req': effRepReq, _tickCount: myTickCount, _allTickCount: allTickCount, _berCount: berCount, _manualAdj: manualAdj, _fullyDone: fullyDone };
+  return { ...row, 'Open Orders': effOpenOrders, 'Total Qty': newTotalQty, 'Rep Req': effRepReq, _tickCount: myTickCount, _allTickCount: rawAllTickCount, _berCount: rawBerCount, _manualAdj: manualAdj, _fullyDone: fullyDone };
 }
 
 function updateDoneCount() {
@@ -1059,9 +1382,9 @@ function updateDoneCount() {
   const totalBers = Object.values(bers).reduce((sum, v) => sum + (typeof v === 'object' ? (v.count || 0) : 0), 0);
   document.getElementById('stat-done').textContent = totalTicks;
   document.getElementById('stat-ber-today').textContent = totalBers;
-  document.getElementById('tab-count-main').textContent = outputRows.length;
-  // Tab badge shows total ticks only
-  document.getElementById('tab-count-done').textContent = totalTicks + totalBers;
+  updatePriorityTotals();
+  // Completed tab badge: completed count, with BERs shown separately
+  document.getElementById('tab-count-done').innerHTML = totalBers > 0 ? (totalTicks + ' <span style="opacity:0.8;">+ ' + totalBers + ' BER</span>') : String(totalTicks);
   // Refresh completed tab if active
   if (currentTab === 'done') renderCompleted();
 }
@@ -1260,11 +1583,11 @@ function confirmAddPart(type) {
   if (type === 'tick') {
     // Only write to TICKS_REF — saveToHistory will handle history automatically
     const currentTick = getTickCount(selectedPartId);
-    TICKS_REF.child(key).set({ count: currentTick + qty, lastUpdated: Date.now() });
+    TICKS_REF.child(key).transaction(t => nextEntry(t, qty));
   } else if (type === 'ber') {
     // Only write to BER_REF — saveToHistory will handle history automatically
     const currentBer = getBerCount(selectedPartId);
-    BER_REF.child(key).set({ count: currentBer + qty, lastUpdated: Date.now() });
+    BER_REF.child(key).transaction(b => nextEntry(b, qty));
   }
 
   closeModal();
@@ -1279,6 +1602,8 @@ document.addEventListener('click', e => {
 });
 
 function loginAs(userId) {
+  // PIN lock: only continue if this user has unlocked today in this browser session
+  if (!isUnlocked(userId)) { startPinFlow(userId); return; }
   try {
     currentUser = userId;
     const user = USERS[userId];
@@ -1294,6 +1619,7 @@ function loginAs(userId) {
     document.getElementById('active-user-name').textContent = user.name;
     document.getElementById('header-user-dot').style.background = user.color;
     document.getElementById('admin-btn').style.display = 'inline-block';
+    document.getElementById('pin-btn').style.display = 'inline-block';
 
     // Hide login screen
     document.getElementById('login-screen').style.display = 'none';
@@ -1304,6 +1630,7 @@ function loginAs(userId) {
     // Listen to ALL users' ticks for live priority list view
     ALL_TICKS_REF.on('value', snap => {
       allUserTicks = snap.val() || {};
+      updatePriorityTotals();
       if (currentTab === 'main') renderTable();
     });
 
@@ -1325,6 +1652,7 @@ function switchUser() {
   currentUser = null;
   document.getElementById('login-screen').style.display = 'flex';
   document.getElementById('active-user-badge').style.display = 'none';
+  document.getElementById('pin-btn').style.display = 'none';
   document.getElementById('stats-bar').style.display = 'none';
   document.getElementById('tab-bar').style.display = 'none';
   document.getElementById('actions-bar').style.display = 'none';
@@ -1337,7 +1665,19 @@ function switchUser() {
 function startFirebaseListeners() {
   STOCK_ADJ_REF.on('value', snap => {
     stockAdjustments = snap.val() || {};
+    updatePriorityTotals();
     if (currentTab === 'main') renderTable();
+  });
+
+  DCD_PARTS_REF.on('value', snap => {
+    const v = snap.val();
+    if (!v || !dataLoaded) return;
+    const next = new Set(Object.values(v));
+    const same = next.size === DCD_PARTS.size && [...next].every(p => DCD_PARTS.has(p));
+    if (same) return;
+    DCD_PARTS.clear();
+    next.forEach(p => DCD_PARTS.add(p));
+    scheduleReload();
   });
 
   CUSTOM_PARTS_REF.on('value', snap => {
@@ -1398,6 +1738,18 @@ async function loadAll() {
     const cpSnap = await CUSTOM_PARTS_REF.once('value');
     customParts = cpSnap.val() || {};
   } catch(e) { customParts = {}; }
+  // Load the DCD parts list from Firebase (seeded from the built-in list on first run)
+  try {
+    const dsnap = await DCD_PARTS_REF.once('value');
+    let dlist = dsnap.val();
+    if (!dlist) {
+      dlist = {};
+      DCD_DEFAULTS.forEach(p => { dlist[safeKey(p)] = p; });
+      await DCD_PARTS_REF.set(dlist);
+    }
+    DCD_PARTS.clear();
+    Object.values(dlist).forEach(p => DCD_PARTS.add(p));
+  } catch(e) { console.error('DCD list load failed, using built-in list', e); }
 
 
   document.getElementById('loading-bar').style.display = 'flex';
@@ -1450,20 +1802,24 @@ async function loadAll() {
       const note = (r['Note'] || '').toLowerCase().trim();
       const status = (r['Status'] || '').toLowerCase().trim();
       if (!partId) return;
-      if (!partNotes[partId]) partNotes[partId] = { total: 0, excluded: 0 };
+      if (!partNotes[partId]) partNotes[partId] = { total: 0, excluded: 0, reasons: new Set() };
       partNotes[partId].total++;
-      const isNoteExcluded = note && EXCLUDED_KEYWORDS.some(kw => note.includes(kw));
+      const matchedKw = note ? EXCLUDED_KEYWORDS.find(kw => note.includes(kw)) : null;
       const isDeployExcluded = status === 'at deployment';
-      if (isNoteExcluded || isDeployExcluded) {
-        partNotes[partId].excluded++;
-      }
+      if (matchedKw) partNotes[partId].reasons.add('Note: "' + matchedKw + '"');
+      if (isDeployExcluded) partNotes[partId].reasons.add('Status: AT DEPLOYMENT');
+      if (matchedKw || isDeployExcluded) partNotes[partId].excluded++;
     });
+    hiddenParts = [];
     Object.keys(partNotes).forEach(partId => {
       const p = partNotes[partId];
       if (p.total > 0 && p.excluded >= p.total) {
         excludedByNote.add(partId);
+        if (DCD_PARTS.has(partId)) hiddenParts.push({ id: partId, calls: p.total, reasons: [...p.reasons] });
       }
     });
+    hiddenParts.sort((a, b) => a.id.localeCompare(b.id));
+    updateHiddenBtn();
 
     boRows.forEach(r => {
       const id = (r['Part ID'] || '').toString().trim();
@@ -1492,6 +1848,7 @@ async function loadAll() {
 
     Object.keys(pbiMap).forEach(id => {
       if (boIds.has(id)) return;
+      if (excludedByNote.has(id)) return; // hidden by backorder keyword filter
       const pbi = pbiMap[id];
       if (pbi.repReq === 0) return;
       const cls = gradeMap[id] || '';
@@ -1509,7 +1866,7 @@ async function loadAll() {
     document.getElementById('tab-bar').style.display = 'flex';
     document.getElementById('actions-bar').style.display = 'flex';
     document.getElementById('table-wrap').style.display = 'block';
-    document.getElementById('tab-count-main').textContent = outputRows.length;
+    updatePriorityTotals();
     document.getElementById('last-updated').style.display = 'block';
     document.getElementById('last-updated').textContent = 'Loaded at ' + new Date().toLocaleTimeString('en-GB');
     // Set list updated bar
@@ -1525,6 +1882,8 @@ async function loadAll() {
     dataLoaded = true;
     // Now that outputRows is populated, save any existing ticks/BERs to history
     saveToHistory();
+    const manageOverlay = document.getElementById('manage-overlay');
+    if (manageOverlay && manageOverlay.style.display === 'flex') renderManageList();
   } catch(err) {
     document.getElementById('loading-bar').style.display = 'none';
     document.getElementById('error-msg').style.display = 'block';
@@ -1532,7 +1891,22 @@ async function loadAll() {
   }
 }
 
+function updatePriorityTotals() {
+  let rep = 0, stock = 0;
+  outputRows.forEach(r => {
+    if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return;
+    const eff = getEffectiveRow(r);
+    rep += Number(eff['Rep Req']) || 0;
+    stock += Number(eff['Total Qty']) || 0;
+  });
+  const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+  set('stat-rep-total', rep);
+  set('stat-stock-total', stock);
+  set('tab-count-main', rep);   // Priority List badge = total rep req
+}
+
 function renderTable() {
+  updatePriorityTotals();
   const search = document.getElementById('search-input').value.toLowerCase();
   let rows = outputRows.filter(r => {
     if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
@@ -1798,11 +2172,7 @@ function decrementHistoryEntry(date, key, currentCount, currentBer) {
   }
   // Sync to ticks/BER refs if today
   if (date === TODAY && !key.startsWith('ber_')) {
-    TICKS_REF.child(key).transaction(t => {
-      if (!t) return null;
-      const newC = Math.max(0, (t.count || 0) - 1);
-      return newC <= 0 ? null : { count: newC };
-    });
+    TICKS_REF.child(key).transaction(t => nextEntry(t, -1));
   }
 }
 
@@ -1816,10 +2186,7 @@ function incrementHistoryEntry(date, key) {
   });
   // Sync to ticks ref if today
   if (date === TODAY && !key.startsWith('ber_')) {
-    TICKS_REF.child(key).transaction(t => {
-      if (!t) return { count: 1 };
-      return { count: (t.count || 0) + 1 };
-    });
+    TICKS_REF.child(key).transaction(t => nextEntry(t, 1));
   }
 }
 
@@ -1840,11 +2207,7 @@ function removeBerFromHistory(date, key, currentCount, currentBer) {
   // Sync to BER ref if today
   if (date === TODAY) {
     const berKey = key.startsWith('ber_') ? key.slice(4) : key;
-    BER_REF.child(berKey).transaction(b => {
-      if (!b) return null;
-      const newC = Math.max(0, (b.count || 0) - 1);
-      return newC <= 0 ? null : { count: newC };
-    });
+    BER_REF.child(berKey).transaction(b => nextEntry(b, -1));
   }
 }
 
@@ -2053,10 +2416,7 @@ function addBerToHistory(date, key) {
   // Sync to BER ref if today
   if (date === TODAY) {
     const berKey = key.startsWith('ber_') ? key.slice(4) : key;
-    BER_REF.child(berKey).transaction(b => {
-      if (!b) return { count: 1 };
-      return { count: (b.count || 0) + 1 };
-    });
+    BER_REF.child(berKey).transaction(b => nextEntry(b, 1));
   }
 }
 
@@ -2286,6 +2646,10 @@ function getDateRowStyle(dateStr) {
 function filterByGrade(grade) {
   activeGradeFilter = (activeGradeFilter === grade) ? 'all' : grade;
   renderHistory();
+  if (activeGradeFilter === '?') {
+    const sec = document.getElementById('ungraded-section');
+    if (sec && sec.style.display !== 'none') setTimeout(() => sec.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+  }
 }
 
 function renderHistory() {
@@ -2456,7 +2820,7 @@ function renderHistory() {
   const ungradedSection = document.getElementById('ungraded-section');
   const ungradedTbody = document.getElementById('ungraded-tbody');
   if (ungradedSection && ungradedTbody) {
-    if (ungradedEntries.length > 0 && activeGradeFilter === 'all') {
+    if (ungradedEntries.length > 0 && (activeGradeFilter === 'all' || activeGradeFilter === '?')) {
       ungradedSection.style.display = 'block';
       document.getElementById('ungraded-count').textContent = ungradedEntries.length + ' parts';
       ungradedTbody.innerHTML = '';
@@ -2468,7 +2832,7 @@ function renderHistory() {
         tr.innerHTML = '<td style="padding:0.4rem 0.8rem;background:' + bg + ';font-size:0.7rem;color:var(--muted);">' + dateLabel + '</td>'
           + '<td style="padding:0.4rem 0.8rem;background:' + bg + ';font-weight:600;">' + (e.partId || '') + '</td>'
           + '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;color:var(--green);font-weight:700;">' + (e.count || 0) + '</td>'
-          + '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;color:var(--muted);">—</td>';
+          + '<td style="padding:0.4rem 0.8rem;background:' + bg + ';text-align:center;"><select data-pid="' + escAttr(e.partId || '') + '" onchange="gradeFromUngraded(this)" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);border-radius:3px;font-size:0.7rem;padding:2px 4px;"><option value="">Set grade…</option><option value="X">X</option><option value="S">S</option><option value="C">C</option><option value="B">B</option><option value="A">A</option><option value="M">M</option></select></td>';
         ungradedTbody.appendChild(tr);
       });
     } else {
@@ -2835,7 +3199,13 @@ async function uploadAdminFiles() {
     fill.style.width = '100%';
     msg.textContent = '✓ Uploaded! All users will see the updated list.';
     msg.style.color = 'var(--green)';
-    db.ref('lastUpdated').set(Date.now());
+    const uploadTs = Date.now();
+    db.ref('lastUpdated').set(uploadTs);
+    if (toUpload.includes('powerbi') || toUpload.includes('backorder')) {
+      db.ref('filesUploadedAt').set(uploadTs);   // earlier work no longer affects the new numbers
+      filesUploadedAt = uploadTs;
+      db.ref('stockAdjustments').remove();       // fresh report = fresh stock
+    }
     btn.disabled = false;
     setTimeout(() => { closeAdmin(); loadAll(); }, 2000);
   } catch(err) {
@@ -2916,6 +3286,54 @@ document.addEventListener('click', e => { if (e.target.id === 'admin-overlay') c
       <div style="display:flex;gap:0.75rem;justify-content:flex-end;">
         <button onclick="closeNewPartModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1rem;cursor:pointer;border-radius:3px;background:transparent;color:var(--muted);border:1px solid var(--border);">Cancel</button>
         <button onclick="saveNewPart()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:3px;background:var(--green);color:white;border:none;">Save Part</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Manage Parts Modal -->
+  <div id="manage-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;width:560px;max-width:95vw;padding:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h3 style="font-family:'Syne',sans-serif;font-size:0.9rem;font-weight:700;margin:0;">Manage Parts</h3>
+        <button onclick="closeManageModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;">✕</button>
+      </div>
+      <p style="font-size:0.68rem;color:var(--muted);margin:0 0 0.75rem;">Tick DCD to show a part on the priority list. Changing a grade applies to any of your ungraded history for that part. Changes sync to everyone.</p>
+      <input type="search" id="manage-search" placeholder="Search part ID..." oninput="renderManageList()" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:0.8rem;padding:0.5rem 0.8rem;border-radius:3px;outline:none;box-sizing:border-box;margin-bottom:0.5rem;"/>
+      <div id="manage-count" style="font-size:0.65rem;color:var(--muted);margin-bottom:0.5rem;"></div>
+      <div id="manage-list" style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:4px;"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:1rem;">
+        <button onclick="closeManageModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:3px;background:transparent;color:var(--muted);border:1px solid var(--border);">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Hidden Parts Modal -->
+  <div id="hidden-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;width:520px;max-width:95vw;padding:1.5rem;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+        <h3 style="font-family:'Syne',sans-serif;font-size:0.9rem;font-weight:700;margin:0;">Hidden from priority list</h3>
+        <button onclick="closeHiddenModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;">✕</button>
+      </div>
+      <p style="font-size:0.68rem;color:var(--muted);margin:0 0 0.75rem;">DCD parts where every backorder call has a hide keyword (done, completed, in progress, AT DEPLOYMENT).</p>
+      <div id="hidden-list" style="max-height:50vh;overflow-y:auto;border:1px solid var(--border);border-radius:4px;"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:1rem;">
+        <button onclick="closeHiddenModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:3px;background:transparent;color:var(--muted);border:1px solid var(--border);">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- PIN Modal -->
+  <div id="pin-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.75);z-index:100000;align-items:center;justify-content:center;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;width:320px;max-width:92vw;padding:1.5rem;">
+      <h3 id="pin-title" style="font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:700;margin:0 0 0.5rem;">Enter your PIN</h3>
+      <p id="pin-sub" style="font-size:0.7rem;color:var(--muted);margin:0 0 1rem;line-height:1.5;"></p>
+      <input type="password" id="pin-current" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Current PIN" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onkeydown="if(event.key==='Enter')submitPin()" style="display:none;width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:1rem;letter-spacing:0.3em;text-align:center;padding:0.6rem;border-radius:3px;outline:none;margin-bottom:0.6rem;"/>
+      <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="PIN" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onkeydown="if(event.key==='Enter')submitPin()" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:1rem;letter-spacing:0.3em;text-align:center;padding:0.6rem;border-radius:3px;outline:none;margin-bottom:0.6rem;"/>
+      <input type="password" id="pin-confirm" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Confirm PIN" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onkeydown="if(event.key==='Enter')submitPin()" style="display:none;width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:1rem;letter-spacing:0.3em;text-align:center;padding:0.6rem;border-radius:3px;outline:none;margin-bottom:0.6rem;"/>
+      <div id="pin-error" style="display:none;font-size:0.7rem;color:var(--accent);margin-bottom:0.75rem;"></div>
+      <div style="display:flex;gap:0.75rem;justify-content:flex-end;margin-top:0.5rem;">
+        <button onclick="closePinModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1rem;cursor:pointer;border-radius:3px;background:transparent;color:var(--muted);border:1px solid var(--border);">Cancel</button>
+        <button id="pin-submit" onclick="submitPin()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:3px;background:var(--accent2);color:white;border:none;">Unlock</button>
       </div>
     </div>
   </div>

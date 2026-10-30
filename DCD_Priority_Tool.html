@@ -922,29 +922,22 @@ function confirmAdjust(action) {
 }
 
 // ── PIN lock ─────────────────────────────────────────────────────────────────
-// A soft lock to keep work and earnings private on a shared screen. The unlock lasts until the
-// browser is closed or the date changes (whichever comes first).
+// A soft lock to keep work and earnings private on a shared screen. The unlock lasts until this
+// page/tab is closed (a refresh keeps you signed in; there is no daily time-out).
 let pinMode = 'enter';   // 'enter' | 'create' | 'change'
 let pinUser = null;
 let pinStoredHash = null;
 
-function localDateStr() {
-  const d = new Date();
-  const pad = n => String(n).padStart(2, '0');
-  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-}
-
+const unlockedUsers = {};   // in-memory backup in case browser storage is blocked
 function isUnlocked(userId) {
-  const today = localDateStr();
-  try { if (sessionStorage.getItem('dcdUnlock_' + userId) === today) return true; } catch (e) {}
-  return document.cookie.split('; ').some(c => c === 'dcdUnlock_' + userId + '=' + today);
+  if (unlockedUsers[userId]) return true;
+  try { return sessionStorage.getItem('dcdUnlock_' + userId) === '1'; } catch (e) { return false; }
 }
 
 function setUnlocked(userId) {
-  const today = localDateStr();
-  try { sessionStorage.setItem('dcdUnlock_' + userId, today); } catch (e) {}
-  // No expiry set = session cookie, which is cleared when the browser is fully closed
-  document.cookie = 'dcdUnlock_' + userId + '=' + today + '; SameSite=Strict';
+  unlockedUsers[userId] = true;
+  // sessionStorage survives a refresh but is cleared when the page/tab is closed - no daily time-out
+  try { sessionStorage.setItem('dcdUnlock_' + userId, '1'); } catch (e) {}
 }
 
 async function hashPin(userId, pin) {
@@ -983,7 +976,7 @@ function showPinModal(mode) {
   document.getElementById('pin-sub').textContent = mode === 'enter'
     ? name + ' — enter your PIN to continue.'
     : (mode === 'create'
-        ? name + ' — choose a 4–6 digit PIN. You will only be asked again after closing the browser or on a new day.'
+        ? name + ' — choose a 4–6 digit PIN. You will only be asked again after you close this page.'
         : 'Enter your current PIN, then choose a new one.');
   show('pin-current', mode === 'change');
   show('pin-confirm', mode !== 'enter');
@@ -1069,10 +1062,40 @@ async function applyDcdMoveOnce() {
 }
 
 // ── Manage parts / hidden parts / backup ─────────────────────────────────────
+// ── Auto-refresh when a new report is uploaded (by anyone) ───────────────────
+let lastSeenUpload = null;
+let uploadWatchHandler = null;
+
+function showToast(msg) {
+  const t = document.createElement('div');
+  t.textContent = msg;
+  t.style.cssText = 'position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--surface2);color:var(--text);border:1px solid var(--accent2);border-radius:6px;padding:0.6rem 1.1rem;font-size:0.75rem;z-index:100001;box-shadow:0 4px 16px rgba(0,0,0,0.4);';
+  document.body.appendChild(t);
+  setTimeout(() => { if (t.parentNode) t.parentNode.removeChild(t); }, 5000);
+}
+
+function onUploadChange(snap) {
+  const t = snap.val() || 0;
+  if (lastSeenUpload === null) { lastSeenUpload = t; return; }   // first value = the version already on screen
+  if (!t || t === lastSeenUpload) return;
+  lastSeenUpload = t;
+  showToast('New report uploaded — updating your list…');
+  scheduleReload();
+}
+
+// Coming back to the page after it sat in the background or the computer slept: check for a missed upload
+document.addEventListener('visibilitychange', async () => {
+  if (document.hidden || !currentUser || lastSeenUpload === null) return;
+  try {
+    const t = (await db.ref('lastUpdated').once('value')).val() || 0;
+    if (t && t !== lastSeenUpload) onUploadChange({ val: () => t });
+  } catch (e) {}
+});
+
 let reloadTimer = null;
 function scheduleReload() {
   clearTimeout(reloadTimer);
-  reloadTimer = setTimeout(() => loadAll(), 700);
+  reloadTimer = setTimeout(() => loadAll(true), 700);
 }
 
 function escAttr(s) {
@@ -1797,6 +1820,11 @@ function switchUser() {
 }
 
 function startFirebaseListeners() {
+  if (uploadWatchHandler) db.ref('lastUpdated').off('value', uploadWatchHandler);
+  lastSeenUpload = null;
+  uploadWatchHandler = onUploadChange;
+  db.ref('lastUpdated').on('value', uploadWatchHandler);
+
   STOCK_ADJ_REF.on('value', snap => {
     stockAdjustments = snap.val() || {};
     updatePriorityTotals();
@@ -1887,7 +1915,18 @@ function startFirebaseListeners() {
   });
 }
 
-async function loadAll() {
+let loadAllRunning = false, loadAllPending = false;
+async function loadAll(quiet) {
+  if (loadAllRunning) { loadAllPending = true; return; }   // already loading: run once more when it finishes
+  loadAllRunning = true;
+  try { await loadAllNow(quiet); }
+  finally {
+    loadAllRunning = false;
+    if (loadAllPending) { loadAllPending = false; loadAll(true); }
+  }
+}
+
+async function loadAllNow(quiet) {
   // Load file upload timestamp
   try {
     const snap = await db.ref('filesUploadedAt').once('value');
@@ -1963,10 +2002,12 @@ async function loadAll() {
   await applyDcdMoveOnce();
 
 
-  document.getElementById('loading-bar').style.display = 'flex';
-  document.getElementById('stats-bar').style.display = 'none';
-  document.getElementById('actions-bar').style.display = 'none';
-  document.getElementById('table-wrap').style.display = 'none';
+  if (!quiet) {   // a background refresh leaves the screen as it is until the new data is ready
+    document.getElementById('loading-bar').style.display = 'flex';
+    document.getElementById('stats-bar').style.display = 'none';
+    document.getElementById('actions-bar').style.display = 'none';
+    document.getElementById('table-wrap').style.display = 'none';
+  }
   document.getElementById('error-msg').style.display = 'none';
 
   try {
@@ -2090,6 +2131,13 @@ async function loadAll() {
     document.getElementById('live-status').style.display = 'block';
     sortCol = null;
     renderTable();
+    if (currentTab !== 'main') {   // a refresh must not switch you back to the priority list
+      document.getElementById('actions-bar').style.display = 'none';
+      document.getElementById('table-wrap').style.display = 'none';
+      document.getElementById('zero-section').style.display = 'none';
+      if (currentTab === 'done') renderCompleted();
+      else if (currentTab === 'history') renderHistory();
+    }
     dataLoaded = true;
     // Now that outputRows is populated, save any existing ticks/BERs to history
     saveToHistory();
@@ -3440,12 +3488,13 @@ async function uploadAdminFiles() {
     msg.textContent = '✓ Uploaded! All users will see the updated list.';
     msg.style.color = 'var(--green)';
     const uploadTs = Date.now();
-    db.ref('lastUpdated').set(uploadTs);
     if (toUpload.includes('powerbi') || toUpload.includes('backorder')) {
       db.ref('filesUploadedAt').set(uploadTs);   // earlier work no longer affects the new numbers
       filesUploadedAt = uploadTs;
       db.ref('stockAdjustments').remove();       // fresh report = fresh stock
     }
+    lastSeenUpload = uploadTs;                   // this page reloads itself below, so skip the automatic refresh
+    db.ref('lastUpdated').set(uploadTs);         // written last so other pages find everything ready
     btn.disabled = false;
     setTimeout(() => { closeAdmin(); loadAll(); }, 2000);
   } catch(err) {

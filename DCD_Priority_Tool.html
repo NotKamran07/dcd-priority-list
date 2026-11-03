@@ -1439,7 +1439,7 @@ function gradeFromUngraded(sel) {
 
 function openManageModal() {
   document.getElementById('manage-help').textContent = isAdmin()
-    ? "Tick a department to put a part on that department's list (a part can be on several). Changing a grade also grades any of your ungraded history for that part. Type ? to list parts with no grade, or ! for new parts that need a department or grade. Changes sync to everyone."
+    ? "Tick a department to put a part on that department's list (a part can be on several). Changing a grade also grades any of your ungraded history for that part. Type ? to list parts with no grade, or ! for active parts that need a department (RC MCD or no team in PowerBI) or a grade. Parts with a real PowerBI department are placed automatically. Changes sync to everyone."
     : 'Look up any part here. To change a grade or department, press Request change and the admin will approve it. Type ? to list parts with no grade.';
   document.getElementById('manage-search').value = '';
   document.getElementById('manage-overlay').style.display = 'flex';
@@ -1495,7 +1495,8 @@ function renderManageList() {
       : '<button data-pid="' + pa + '" onclick="requestChangeFor(this)" style="font-size:0.65rem;padding:2px 8px;cursor:pointer;border-radius:3px;background:transparent;color:var(--accent2);border:1px solid var(--accent2);">Request change</button>';
     h += '<tr>'
       + '<td style="' + cell + 'font-family:IBM Plex Mono,monospace;">' + pa
-        + ((window.partTeams || {})[p] ? '<div style="font-size:0.58rem;color:var(--muted);font-family:inherit;">' + escAttr(window.partTeams[p]) + '</div>' : '') + '</td>'
+        + ((window.partTeams || {})[p] ? '<div style="font-size:0.58rem;color:var(--muted);font-family:inherit;">' + escAttr(window.partTeams[p]) + '</div>' : '')
+        + (q === '!' && (window.newReasons || {})[p] ? '<div style="font-size:0.58rem;color:var(--accent);font-family:inherit;font-weight:700;">' + escAttr(window.newReasons[p]) + '</div>' : '') + '</td>'
       + '<td style="' + cell + 'text-align:center;">' + gradeCell + '</td>'
       + boxes
       + '<td style="' + cell + 'text-align:right;">' + lastCell + '</td></tr>';
@@ -2387,7 +2388,11 @@ async function loadAllNow(quiet) {
     const idx = buildPartIndex(pbiRows, boRows);
     window.allPartIds = idx.all;
     window.partTeams = idx.teams;
-    window.newParts = idx.newParts;
+    try { autoAssigned = (await db.ref('autoAssigned').once('value')).val() || {}; } catch (e) { autoAssigned = {}; }
+    try { await autoAssignFromTeams(idx.active, idx.teams); } catch (e) { console.error('Auto-assign skipped', e); }
+    const np = computeNewParts(idx.active);
+    window.newParts = np.list;
+    window.newReasons = np.reasons;
     updateNewBtn();
 
     const pbiMap = {};
@@ -2524,10 +2529,51 @@ function buildPartIndex(pbiRows, boRows) {
   });
   Object.keys(partGrades).forEach(p => all.add(p));
   Object.values(DEPT_PARTS).forEach(set => set.forEach(p => all.add(p)));
-  const onAnyList = id => Object.values(DEPT_PARTS).some(set => set.has(id));
+  return { all, teams, active };
+}
+
+// PowerBI Repair Team -> department. RC MCD (and anything else) is not a real department.
+const TEAM_TO_DEPT = { 'RC DCD': 'DCD', 'RC PC': 'PC', 'RC PCB': 'PCB', 'RC PRINTERS & PERIPHERALS': 'Printers' };
+let autoAssigned = {};   // parts already placed from their PowerBI team (so an admin removal sticks)
+
+function partOnAnyList(id) { return Object.values(DEPT_PARTS).some(set => set.has(id)); }
+
+// A part that is active in the reports, on no department list, and whose PowerBI team IS a real
+// department gets put on that department's list (once). The admin can still change it afterwards.
+async function autoAssignFromTeams(active, teams) {
+  const todo = [];
+  active.forEach(id => {
+    const d = TEAM_TO_DEPT[(teams[id] || '').trim().toUpperCase()];
+    if (!d || partOnAnyList(id) || autoAssigned[safeKey(id)]) return;
+    todo.push([id, d]);
+  });
+  if (!todo.length) return 0;
+  const updates = {};
+  todo.forEach(([id, d]) => {
+    const k = safeKey(id);
+    DEPT_PARTS[d].add(id);                       // apply on this screen straight away
+    autoAssigned[k] = d;
+    updates[(d === 'DCD' ? 'dcdParts/' : 'deptParts/' + d + '/') + k] = id;
+    updates['autoAssigned/' + k] = d;
+  });
+  await db.ref().update(updates);                // shared: every screen picks it up
+  logChange('Auto-assigned from PowerBI team', '', todo.length + ' part(s): '
+    + todo.slice(0, 6).map(([id, d]) => id + ' → ' + DEPT_LABELS[d]).join(', ') + (todo.length > 6 ? ' …' : ''));
+  return todo.length;
+}
+
+// Parts that still need a person to decide: active in the reports and (no department that PowerBI can
+// supply, or no grade). Returns the list plus why each one is on it.
+function computeNewParts(active) {
   const gm = window.gradeMap || {};
-  const newParts = [...active].filter(id => !onAnyList(id) || !gm[id]).sort();
-  return { all, teams, newParts };
+  const reasons = {};
+  active.forEach(id => {
+    const needs = [];
+    if (!partOnAnyList(id) && !autoAssigned[safeKey(id)]) needs.push('needs department');
+    if (!gm[id]) needs.push('needs grade');
+    if (needs.length) reasons[id] = needs.join(' + ');
+  });
+  return { list: Object.keys(reasons).sort(), reasons };
 }
 
 function updateNewBtn() {
@@ -3970,7 +4016,7 @@ document.addEventListener('click', e => { if (e.target.id === 'admin-overlay') c
         <h3 style="font-family:'Syne',sans-serif;font-size:0.9rem;font-weight:700;margin:0;">Manage Parts</h3>
         <button onclick="closeManageModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;">✕</button>
       </div>
-      <p id="manage-help" style="font-size:0.68rem;color:var(--muted);margin:0 0 0.75rem;">Tick a department to put a part on that department's list (a part can be on several). Changing a grade also grades any of your ungraded history for that part. Type ? to list parts with no grade, or ! for new parts that need a department or grade. Changes sync to everyone.</p>
+      <p id="manage-help" style="font-size:0.68rem;color:var(--muted);margin:0 0 0.75rem;">Tick a department to put a part on that department's list (a part can be on several). Changing a grade also grades any of your ungraded history for that part. Type ? to list parts with no grade, or ! for active parts that need a department (RC MCD or no team in PowerBI) or a grade. Parts with a real PowerBI department are placed automatically. Changes sync to everyone.</p>
       <input type="search" id="manage-search" placeholder="Search part ID (any department) — or type ? for ungraded..." oninput="renderManageList()" autocomplete="off" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:0.8rem;padding:0.5rem 0.8rem;border-radius:3px;outline:none;box-sizing:border-box;margin-bottom:0.5rem;"/>
       <div class="admin-only" style="display:flex;gap:0.6rem;align-items:center;margin-bottom:0.5rem;"><button onclick="exportPartsSheet()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;padding:0.35rem 0.8rem;cursor:pointer;border-radius:3px;background:transparent;color:var(--accent2);border:1px solid var(--accent2);">⬇ Export</button><button onclick="document.getElementById('manage-import').click()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.65rem;text-transform:uppercase;padding:0.35rem 0.8rem;cursor:pointer;border-radius:3px;background:transparent;color:var(--accent2);border:1px solid var(--accent2);">⬆ Import sheet</button><input type="file" id="manage-import" accept=".xlsx,.xls,.csv" style="display:none" onchange="importPartsSheet(this)"/><span style="font-size:0.62rem;color:var(--muted);">Export, edit Grade / Yes-No columns, then Import it back</span></div>
       <div id="manage-count" style="font-size:0.65rem;color:var(--muted);margin-bottom:0.5rem;"></div>

@@ -887,6 +887,8 @@ function safeKey(partId) {
 let adjustModalPartId = null;
 let stockAdjustments = {};
 const STOCK_ADJ_REF = db.ref('stockAdjustments');
+const FOURTH_REF = db.ref('fourthParty');   // units we know are at a 4th party (shared, resets on a new report)
+let fourthParty = {};
 const CUSTOM_PARTS_REF = db.ref('customParts');
 let customParts = {}; // { safeKey: { partId, grade, isDCD } }
 
@@ -894,12 +896,16 @@ function openAdjustModal(partId) {
   adjustModalPartId = partId;
   const row = outputRows.find(r => r['Part ID'] === partId);
   if (!row) return;
+  const key = safeKey(partId);
   const reportQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
-  const currentAdj = stockAdjustments[safeKey(partId)] || 0;
+  const currentAdj = stockAdjustments[key] || 0;
+  const fp = fourthParty[key] || 0;
   const effQty = Math.max(0, reportQty - currentAdj);
   document.getElementById('adjust-part-id').textContent = partId;
   document.getElementById('adjust-report-qty').textContent = reportQty;
   document.getElementById('adjust-current-qty2').textContent = effQty;
+  document.getElementById('adjust-4p').textContent = fp || '—';
+  document.getElementById('adjust-back4p').style.display = fp > 0 ? 'inline-block' : 'none';
   const adjEl = document.getElementById('adjust-diff');
   if (currentAdj === 0) {
     adjEl.textContent = 'None';
@@ -919,17 +925,34 @@ function closeAdjustModal() {
 
 function resetAdjust() {
   if (!adjustModalPartId) return;
-  STOCK_ADJ_REF.child(safeKey(adjustModalPartId)).remove();
+  const key = safeKey(adjustModalPartId);
+  STOCK_ADJ_REF.child(key).remove();
+  FOURTH_REF.child(key).remove();   // the 4th-party note goes with the adjustment it came from
   closeAdjustModal();
 }
 
 function confirmAdjust(action) {
   if (!adjustModalPartId) return;
   const key = safeKey(adjustModalPartId);
-  const qty = parseInt(document.getElementById('adjust-qty-input').value) || 1;
+  let qty = parseInt(document.getElementById('adjust-qty-input').value) || 1;
   const current = stockAdjustments[key] || 0;
+  const fp = fourthParty[key] || 0;
   if (action === 'add') {
     STOCK_ADJ_REF.child(key).set(current - qty);
+  } else if (action === 'fourth') {
+    // the units are at a 4th party: take them out of the available stock, but remember where they are
+    const row = outputRows.find(r => r['Part ID'] === adjustModalPartId);
+    const available = row ? Number(getEffectiveRow(row)['Total Qty']) || 0 : 0;
+    qty = Math.min(qty, available);
+    if (qty <= 0) { alert('There is no available stock to move to 4th party.'); return; }
+    STOCK_ADJ_REF.child(key).set(current + qty);
+    FOURTH_REF.child(key).set(fp + qty);
+  } else if (action === 'back') {
+    // units have come back from the 4th party: return them to the available stock
+    qty = Math.min(qty, fp);
+    if (qty <= 0) { alert('Nothing is marked as in 4th party for this part.'); return; }
+    STOCK_ADJ_REF.child(key).set(current - qty);
+    if (fp - qty > 0) FOURTH_REF.child(key).set(fp - qty); else FOURTH_REF.child(key).remove();
   } else {
     STOCK_ADJ_REF.child(key).set(current + qty);
   }
@@ -2223,6 +2246,11 @@ function startFirebaseListeners() {
     if (currentTab === 'main') renderTable();
   });
 
+  FOURTH_REF.on('value', snap => {
+    fourthParty = snap.val() || {};
+    if (currentTab === 'main') renderTable();
+  });
+
   NO_DEPT_REF.on('value', snap => {
     if (!dataLoaded) return;
     const next = new Set(Object.values(snap.val() || {}));
@@ -2747,7 +2775,7 @@ function renderTable() {
       <td>${eff['Repair Team'] || ''}</td>
       <td class="num-cell">${eff['Rep Req'] !== '' ? eff['Rep Req'] : ''}</td>
       <td class="num-cell">${openOrdersDisplay !== '' ? openOrdersDisplay : ''}</td>
-      <td class="num-cell">${eff['Total Qty'] !== '' ? eff['Total Qty'] : ''}${eff._manualAdj ? '<span style="font-size:0.6rem;color:var(--accent);margin-left:3px;">(-' + eff._manualAdj + ')</span>' : ''}</td>
+      <td class="num-cell">${eff['Total Qty'] !== '' ? eff['Total Qty'] : ''}${eff._manualAdj ? '<span style="font-size:0.6rem;color:var(--accent);margin-left:3px;">(-' + eff._manualAdj + ')</span>' : ''}${fourthParty[safeKey(partId)] ? '<div style="font-size:0.58rem;color:#f0a040;font-weight:700;white-space:nowrap;">' + fourthParty[safeKey(partId)] + ' @ 4th party</div>' : ''}</td>
       <td class="num-cell grade-${cls}">${cls}</td>
       <td class="num-cell">${valStr}</td>
       <td class="num-cell"><button data-pid="${partId}" onclick="openAdjustModal(this.dataset.pid)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.7rem;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);cursor:pointer;border-radius:2px;">⚙</button></td>`;
@@ -2776,9 +2804,10 @@ function renderTable() {
         <td class="part-id">${row['Part ID']}</td>
         <td>${row['Repair Team'] || ''}</td>
         <td class="num-cell">${row['Rep Req'] !== '' ? row['Rep Req'] : ''}</td>
-        <td class="num-cell">—</td>
+        <td class="num-cell">—${fourthParty[safeKey(row['Part ID'])] ? '<div style="font-size:0.58rem;color:#f0a040;font-weight:700;white-space:nowrap;">' + fourthParty[safeKey(row['Part ID'])] + ' @ 4th party</div>' : ''}</td>
         <td class="num-cell grade-${cls}">${cls}</td>
-        <td class="num-cell">${valStr}</td>`;
+        <td class="num-cell">${valStr}</td>
+        <td class="num-cell"><button data-pid="${row['Part ID']}" onclick="openAdjustModal(this.dataset.pid)" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.7rem;padding:3px 8px;background:var(--surface2);border:1px solid var(--border);color:var(--text);cursor:pointer;border-radius:2px;">⚙</button></td>`;
       zeroBody.appendChild(tr);
     });
   } else {
@@ -3975,6 +4004,7 @@ async function uploadAdminFiles() {
       db.ref('filesUploadedAt').set(uploadTs);   // earlier work no longer affects the new numbers
       filesUploadedAt = uploadTs;
       db.ref('stockAdjustments').remove();       // fresh report = fresh stock
+      db.ref('fourthParty').remove();            // ...and the 4th-party notes that went with those adjustments
     }
     lastSeenUpload = uploadTs;                   // this page reloads itself below, so skip the automatic refresh
     db.ref('lastUpdated').set(uploadTs);         // written last so other pages find everything ready
@@ -3993,7 +4023,7 @@ document.addEventListener('click', e => { if (e.target.id === 'admin-overlay') c
 
   <!-- Stock Adjustment Modal -->
   <div id="adjust-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center;">
-    <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;width:320px;padding:1.5rem;">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;width:400px;max-width:95vw;padding:1.5rem;">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
         <h3 style="font-family:'Syne',sans-serif;font-size:0.9rem;font-weight:700;margin:0;">Adjust Stock</h3>
         <button onclick="closeAdjustModal()" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:1rem;">✕</button>
@@ -4014,15 +4044,21 @@ document.addEventListener('click', e => { if (e.target.id === 'admin-overlay') c
           <div style="color:var(--muted);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">Effective Stock</div>
           <div id="adjust-current-qty2" style="font-weight:700;color:var(--accent2);font-size:1rem;">—</div>
         </div>
+        <div style="flex:1;text-align:center;">
+          <div style="color:var(--muted);font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:2px;">In 4th party</div>
+          <div id="adjust-4p" style="font-weight:700;color:#f0a040;font-size:1rem;">—</div>
+        </div>
       </div>
       <label style="font-size:0.65rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.06em;display:block;margin-bottom:6px;">Quantity to adjust</label>
       <input type="number" id="adjust-qty-input" min="1" value="1" style="width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:0.85rem;padding:0.5rem 0.8rem;border-radius:3px;outline:none;margin-bottom:1rem;box-sizing:border-box;"/>
-      <p style="font-size:0.65rem;color:var(--muted);margin-bottom:1rem;">Corrects a work system error. Resets on next file upload.</p>
+      <p style="font-size:0.65rem;color:var(--muted);margin-bottom:1rem;">Remove/Add corrects a work system error. In 4th party takes units out of the available stock but keeps a note of where they are. All of it resets on the next file upload.</p>
       <div style="display:flex;gap:0.75rem;justify-content:flex-end;flex-wrap:wrap;">
         <button onclick="closeAdjustModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1rem;cursor:pointer;border-radius:3px;background:transparent;color:var(--muted);border:1px solid var(--border);">Cancel</button>
         <button onclick="resetAdjust()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1rem;cursor:pointer;border-radius:3px;background:transparent;color:var(--accent2);border:1px solid var(--accent2);">Reset</button>
         <button onclick="confirmAdjust('add')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:3px;background:var(--green);color:white;border:none;">+ Add Stock</button>
         <button onclick="confirmAdjust('remove')" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:3px;background:var(--accent);color:white;border:none;">− Remove Stock</button>
+        <button onclick="confirmAdjust('fourth')" title="Take these units out of the available stock but remember they are at a 4th party" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:3px;background:#f0a040;color:#1a1a1a;border:none;">In 4th party</button>
+        <button id="adjust-back4p" onclick="confirmAdjust('back')" title="Units have come back from the 4th party: return them to available stock" style="display:none;font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:3px;background:transparent;color:#f0a040;border:1px solid #f0a040;">Back from 4th party</button>
       </div>
     </div>
   </div>

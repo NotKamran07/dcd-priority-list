@@ -67,7 +67,10 @@ const DEPT_SEED = {"PC":["AAH-ROU-CISCO-887","AAH-ROU-CISCO-C887VAG","AAH-ROU-CI
 const USERS = {
   KamranIqbal:  { name: 'Kamran Iqbal',  initials: 'KI', color: '#e8523a', dept: 'DCD', role: 'admin' },
   HusseinMader: { name: 'Hussein Mader', initials: 'HM', color: '#3a7bd5', dept: 'DCD', role: 'user' },
-  LukePerry:    { name: 'Luke Perry',    initials: 'LP', color: '#a855f7', dept: 'DCD', role: 'user' }
+  LukePerry:    { name: 'Luke Perry',    initials: 'LP', color: '#a855f7', dept: 'DCD', role: 'user' },
+  // Add new users in any department below (dept must be 'DCD', 'PC', 'PCB', or 'Printers'):
+  NickGethin:    { name: 'Nick Gethin',    initials: 'NG', color: '#10b981', dept: 'PC',  role: 'user' }
+};
 };
 
 const ADMIN_PWD = 'Vista123@';

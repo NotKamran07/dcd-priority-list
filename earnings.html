@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>View Earnings — Priority Work List</title>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<header class="earnings-page-header">
+  <a class="earnings-back-link" href="DCD_Priority_Tool.html">← Priority Work List</a>
+  <div>
+    <h1>View Earnings</h1>
+    <p id="date-badge"></p>
+  </div>
+</header>
+
+<main class="earnings-page">
+  <section id="public-earnings" class="earnings-viewer">
+    <div class="earnings-viewer-heading">
+      <h2>Select a coworker</h2>
+      <select id="earnings-user-select" onchange="loadPublicEarnings(this.value)" aria-label="Select coworker">
+        <option value="">Select a coworker</option>
+      </select>
+    </div>
+    <div id="public-earnings-status" role="status" aria-live="polite"></div>
+    <div id="public-earnings-content" style="display:none;">
+      <div style="display:flex;justify-content:flex-end;padding-top:0.75rem;">
+        <select id="public-earnings-month" onchange="renderPublicEarnings()" aria-label="Select earnings month" style="padding:0.4rem 0.6rem;border-radius:4px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font:inherit;font-size:0.68rem;">
+          <option value="">Select a month</option>
+        </select>
+      </div>
+      <div class="earnings-viewer-summary">
+        <div class="stat"><span class="stat-label">Parts Completed</span><span class="stat-value" id="public-earnings-parts">0</span></div>
+        <div class="stat"><span class="stat-label">Total Repairs</span><span class="stat-value" id="public-earnings-repairs">0</span></div>
+        <div class="stat"><span class="stat-label">Total Earned</span><span class="stat-value" id="public-earnings-total" style="color:var(--green);">£0.00</span></div>
+        <div class="stat"><span class="stat-label">Avg Repairs / Day</span><span class="stat-value" id="public-earnings-average">0</span></div>
+        <div class="stat">
+          <span class="stat-label">Days Worked</span>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+            <button onclick="adjustPublicDaysWorked(-0.5)" aria-label="Decrease days worked; requires your PIN" title="Requires your PIN" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;width:24px;height:24px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;">−</button>
+            <span class="stat-value" id="public-earnings-days" style="color:var(--accent2);">0</span>
+            <button onclick="adjustPublicDaysWorked(0.5)" aria-label="Increase days worked; requires your PIN" title="Requires your PIN" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;width:24px;height:24px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;">+</button>
+          </div>
+        </div>
+        <div class="stat">
+          <span class="stat-label">Commission Bonus</span>
+          <div>
+            <span class="commission-badge" id="public-earnings-bonus-badge">Not reached</span>
+            <div class="stat-value" id="public-earnings-bonus" style="color:var(--muted);">£0</div>
+          </div>
+        </div>
+        <div class="stat"><span class="stat-label">Total with Bonus</span><span class="stat-value" id="public-earnings-total-bonus" style="color:var(--green);">£0.00</span></div>
+      </div>
+      <div id="public-earnings-target-tracker" class="target-tracker" style="max-width:460px;margin:0 0 1rem;">
+        <div class="target-tracker-title">Monthly Bonus Tracker</div>
+        <div id="public-earnings-target-bars" class="target-bars"></div>
+      </div>
+      <div class="earnings-viewer-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th><th>Part ID</th><th style="text-align:center;">Repairs</th>
+              <th style="text-align:center;">BER'd</th><th style="text-align:center;">Class</th>
+              <th style="text-align:center;">Earned</th>
+            </tr>
+          </thead>
+          <tbody id="public-earnings-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="pin-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:100000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:6px;width:320px;max-width:92vw;padding:1.5rem;">
+    <h3 id="pin-title" style="font-family:'Syne',sans-serif;font-size:0.95rem;font-weight:700;margin:0 0 0.5rem;">Enter your PIN</h3>
+    <p id="pin-sub" style="font-size:0.7rem;color:var(--muted);margin:0 0 1rem;line-height:1.5;"></p>
+    <input type="password" id="pin-current" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Current PIN" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onkeydown="if(event.key==='Enter')submitPin()" style="display:none;width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:1rem;letter-spacing:0.3em;text-align:center;padding:0.6rem;border-radius:3px;outline:none;margin-bottom:0.6rem;"/>
+    <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="PIN" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onkeydown="if(event.key==='Enter')submitPin()" style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:1rem;letter-spacing:0.3em;text-align:center;padding:0.6rem;border-radius:3px;outline:none;margin-bottom:0.6rem;"/>
+    <input type="password" id="pin-confirm" inputmode="numeric" pattern="[0-9]*" maxlength="6" autocomplete="off" placeholder="Confirm PIN" oninput="this.value=this.value.replace(/[^0-9]/g,'')" onkeydown="if(event.key==='Enter')submitPin()" style="display:none;width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:'IBM Plex Mono',monospace;font-size:1rem;letter-spacing:0.3em;text-align:center;padding:0.6rem;border-radius:3px;outline:none;margin-bottom:0.6rem;"/>
+    <div id="pin-error" style="display:none;font-size:0.7rem;color:var(--accent);margin-bottom:0.75rem;"></div>
+    <div style="display:flex;gap:0.75rem;justify-content:flex-end;margin-top:0.5rem;">
+      <button onclick="closePinModal()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1rem;cursor:pointer;border-radius:3px;background:transparent;color:var(--muted);border:1px solid var(--border);">Cancel</button>
+      <button id="pin-submit" onclick="submitPin()" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.72rem;text-transform:uppercase;padding:0.5rem 1.2rem;cursor:pointer;border-radius:3px;background:var(--accent2);color:white;border:none;">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script src="firebase-sync.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

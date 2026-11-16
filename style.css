@@ -298,8 +298,7 @@ tr:hover td { filter: brightness(1.2); }
 /* === LOGIN SCREEN & USER BADGE === */
 #login-screen {
   position: fixed; inset: 0; background: var(--bg); z-index: 9999;
-  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 1.5rem;
-  overflow-y: auto; padding: 1.75rem 1rem; box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem;
   pointer-events: all;
 }
 #login-screen * { pointer-events: all; }
@@ -322,10 +321,24 @@ tr:hover td { filter: brightness(1.2); }
 }
 .user-card-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.82rem; color: var(--text); }
 .user-card-sub { font-size: 0.65rem; color: var(--muted); }
+.earnings-launch-button {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.72rem;
+  text-transform: uppercase; letter-spacing: 0.05em; text-decoration: none;
+  padding: 0.55rem 1.2rem; border: 1px solid var(--accent2); border-radius: 3px;
+  color: var(--accent2); background: transparent;
+}
+.earnings-launch-button:hover { background: var(--surface); }
 .earnings-viewer {
   width: min(900px, 100%); box-sizing: border-box; padding: 1rem;
   background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
 }
+.earnings-page { max-width: 1200px; margin: 0 auto; padding: 2rem 2.5rem 3rem; }
+.earnings-page-header { flex-wrap: wrap; }
+.earnings-back-link {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 0.72rem;
+  color: var(--accent2); text-decoration: none; white-space: nowrap;
+}
+.earnings-back-link:hover { text-decoration: underline; }
 .earnings-viewer-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
 .earnings-viewer-heading h3 { font-family: 'Syne', sans-serif; font-size: 0.82rem; margin: 0; }
 #earnings-user-select {
@@ -338,6 +351,14 @@ tr:hover td { filter: brightness(1.2); }
 .earnings-viewer-table { max-height: 300px; overflow: auto; }
 .earnings-viewer-table th { position: sticky; top: 0; background: var(--surface2); }
 .earnings-viewer-table td { background: var(--surface); }
+@media (max-width: 600px) {
+  .earnings-page { padding: 1.25rem 1rem; }
+  .earnings-viewer-summary { gap: 1rem; }
+  .earnings-viewer .target-bar-wrap { gap: 0.35rem; }
+  .earnings-viewer .target-bar-label { width: 58px; }
+  .earnings-viewer .target-bonus { width: 40px; }
+  .earnings-viewer .target-status { width: 64px; }
+}
 
 #active-user-badge {
   display: none; align-items: center; gap: 6px; padding: 4px 10px;

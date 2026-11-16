@@ -2174,9 +2174,11 @@ async function adjustPublicDaysWorked(delta) {
 }
 
 // === APP BOOTSTRAP ===
-// Sign in from a personal link (?user=Name), or show users for the selected department.
 function initApp() {
-  initEarningsViewer();
+  if (document.getElementById('earnings-user-select')) {
+    initEarningsViewer();
+    return;
+  }
   initLoginFromLink();
 }
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);

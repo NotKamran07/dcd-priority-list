@@ -1977,7 +1977,7 @@ async function loadPublicEarnings(userId) {
   content.style.display = 'none';
   tbody.replaceChildren();
   if (!userId || !USERS[userId]) {
-    status.textContent = 'Select a coworker to view earnings.';
+    status.textContent = '';
     return;
   }
 

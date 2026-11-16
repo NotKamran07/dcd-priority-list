@@ -327,8 +327,7 @@ tr:hover td { filter: brightness(1.2); }
   background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
 }
 .earnings-viewer-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; flex-wrap: wrap; }
-.earnings-viewer-heading h3 { font-family: 'Syne', sans-serif; font-size: 0.9rem; margin: 0 0 0.35rem; }
-.earnings-viewer-heading p { color: var(--muted); font-size: 0.68rem; margin: 0; }
+.earnings-viewer-heading h3 { font-family: 'Syne', sans-serif; font-size: 0.82rem; margin: 0; }
 #earnings-user-select {
   min-width: 190px; padding: 0.5rem 0.7rem; border-radius: 4px;
   background: var(--surface2); color: var(--text); border: 1px solid var(--border);

@@ -16,11 +16,6 @@
 </header>
 
 <main class="earnings-page">
-  <nav class="earnings-tabs" aria-label="Earnings page sections">
-    <button id="earnings-view-tab" class="earnings-tab active" onclick="showPublicEarningsTab()">View Earnings</button>
-    <button id="earnings-admin-tab" class="earnings-tab" onclick="openRCEarningsAdmin()">Admin</button>
-  </nav>
-
   <section id="public-earnings" class="earnings-viewer">
     <div class="earnings-viewer-heading">
       <h2>Select a coworker</h2>
@@ -76,29 +71,6 @@
     </div>
   </section>
 
-  <section id="rc-earnings-admin" class="earnings-viewer" style="display:none;">
-    <h2 class="rc-earnings-title">RC Earnings Upload</h2>
-    <p class="rc-earnings-help">Upload the Repair Center CSV. COMP and NFF count as completed repairs; BER counts as BER. Weekend work is excluded. Re-uploading a file updates matching repair tags without duplicating earnings.</p>
-    <label class="rc-earnings-file">
-      <span>Choose RC earnings CSV</span>
-      <input id="rc-earnings-file" type="file" accept=".csv,text/csv" onchange="handleRCEarningsFile(this)"/>
-    </label>
-    <div id="rc-earnings-admin-status" role="status" aria-live="polite"></div>
-    <div id="rc-earnings-preview" style="display:none;">
-      <h3 id="rc-earnings-preview-title"></h3>
-      <p id="rc-earnings-preview-summary" class="rc-earnings-help"></p>
-      <p class="rc-earnings-help">Check each person’s display name and department before importing. New users will be added to the app roster.</p>
-      <div class="rc-earnings-people">
-        <table>
-          <thead><tr><th>CSV user</th><th>Display name</th><th>Department</th></tr></thead>
-          <tbody id="rc-earnings-people-body"></tbody>
-        </table>
-      </div>
-      <div class="rc-earnings-actions">
-        <button id="rc-earnings-import-btn" class="earnings-tab" onclick="importRCEarnings()" disabled>Import earnings</button>
-      </div>
-    </div>
-  </section>
 </main>
 
 <div id="pin-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:100000;align-items:center;justify-content:center;">

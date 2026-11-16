@@ -771,6 +771,7 @@ function switchTab(tab, btn) {
   document.getElementById('zero-section').style.display = 'none';
   document.getElementById('completed-wrap').style.display = 'none';
   document.getElementById('history-wrap').style.display = 'none';
+  document.getElementById('rc-earnings-wrap').style.display = 'none';
 
   if (tab === 'main') {
     document.getElementById('actions-bar').style.display = 'flex';
@@ -790,6 +791,8 @@ function switchTab(tab, btn) {
     } else {
       renderHistory();
     }
+  } else if (tab === 'rc-earnings') {
+    document.getElementById('rc-earnings-wrap').style.display = 'block';
   }
 }
 
@@ -2001,25 +2004,19 @@ async function loadRCEarningsUsers() {
 
 let rcEarningsImport = null;
 
-function showPublicEarningsTab() {
-  document.getElementById('public-earnings').style.display = '';
-  document.getElementById('rc-earnings-admin').style.display = 'none';
-  document.getElementById('earnings-view-tab').classList.add('active');
-  document.getElementById('earnings-admin-tab').classList.remove('active');
-}
-
 function openRCEarningsAdmin() {
-  const adminId = adminUserId();
-  if (!adminId) {
-    document.getElementById('public-earnings-status').textContent = 'Admin account is not configured.';
+  if (!isAdmin()) {
+    requireAdmin();
     return;
   }
-  const showAdmin = () => {
-    document.getElementById('public-earnings').style.display = 'none';
-    document.getElementById('rc-earnings-admin').style.display = 'block';
-    document.getElementById('earnings-view-tab').classList.remove('active');
-    document.getElementById('earnings-admin-tab').classList.add('active');
-  };
+  const adminId = adminUserId();
+  if (!adminId) {
+    showToast('Admin account is not configured.');
+    return;
+  }
+  const tab = document.getElementById('rc-earnings-tab');
+  if (!tab) return;
+  const showAdmin = () => switchTab('rc-earnings', tab);
   if (isUnlocked(adminId)) showAdmin();
   else startPinFlow(adminId, showAdmin);
 }
@@ -2223,7 +2220,7 @@ function updateRCEarningsImportButton() {
 
 async function importRCEarnings() {
   const adminId = adminUserId();
-  if (!adminId || !isUnlocked(adminId) || !rcEarningsImport) return;
+  if (!isAdmin() || !adminId || !isUnlocked(adminId) || !rcEarningsImport) return;
   const button = document.getElementById('rc-earnings-import-btn');
   const status = document.getElementById('rc-earnings-admin-status');
   button.disabled = true;
@@ -2231,11 +2228,12 @@ async function importRCEarnings() {
   status.textContent = 'Importing RC earnings…';
   try {
     const profiles = new Map();
+    const validDepartments = new Set(['DCD', 'PC', 'PCB', 'Printers']);
     document.querySelectorAll('#rc-earnings-people-body tr').forEach(row => {
       const id = row.dataset.userId;
       const name = row.querySelector('input').value.trim();
       const dept = row.querySelector('select').value;
-      if (!id || !/^[A-Za-z0-9_-]+$/.test(id) || !name || !dept) {
+      if (!id || !/^[A-Za-z0-9_-]+$/.test(id) || !name || !validDepartments.has(dept)) {
         throw new Error('Every CSV user must have a valid display name and department.');
       }
       profiles.set(id, { name, dept });
@@ -2286,9 +2284,12 @@ async function importRCEarnings() {
         role: existing.role || 'user'
       };
     });
-    const selectedUserId = document.getElementById('earnings-user-select').value;
-    populateEarningsUsers(selectedUserId);
-    if (selectedUserId) await loadPublicEarnings(selectedUserId);
+    const userSelect = document.getElementById('earnings-user-select');
+    if (userSelect) {
+      const selectedUserId = userSelect.value;
+      populateEarningsUsers(selectedUserId);
+      if (selectedUserId) await loadPublicEarnings(selectedUserId);
+    }
     status.style.color = 'var(--green)';
     const skipped = rcEarningsImport.skipped;
     status.textContent = 'Imported ' + rcEarningsImport.records.length + ' repair rows. Skipped ' +

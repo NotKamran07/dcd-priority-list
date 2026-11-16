@@ -409,6 +409,13 @@ function switchUser() {
   document.getElementById('zero-section').style.display = 'none';
   document.getElementById('completed-wrap').style.display = 'none';
   document.getElementById('history-wrap').style.display = 'none';
+  const rcEarningsWrap = document.getElementById('rc-earnings-wrap');
+  if (rcEarningsWrap) rcEarningsWrap.style.display = 'none';
+  if (currentTab === 'rc-earnings') {
+    currentTab = 'main';
+    document.getElementById('rc-earnings-tab').classList.remove('active');
+    document.querySelector('#tab-bar .tab-btn').classList.add('active');
+  }
   showLoginCards('all');
 }
 

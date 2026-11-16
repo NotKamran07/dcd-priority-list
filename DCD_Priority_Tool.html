@@ -80,6 +80,7 @@
   <button class="tab-btn active" onclick="switchTab('main', this)">Priority List <span class="tab-count" id="tab-count-main">0</span></button>
   <button class="tab-btn tab-done" onclick="switchTab('done', this)">Completed Today <span class="tab-count" id="tab-count-done">0</span></button>
   <button class="tab-btn tab-history" onclick="switchTab('history', this)">Total Parts Completed <span class="tab-count" id="tab-count-history">0</span></button>
+  <button id="rc-earnings-tab" class="tab-btn tab-rc-earnings admin-only" onclick="openRCEarningsAdmin()">RC Earnings</button>
 </div>
 
 <div id="actions-bar">
@@ -183,6 +184,33 @@
     </thead>
     <tbody id="completed-body"></tbody>
   </table>
+</div>
+
+<!-- === RC EARNINGS ADMIN TAB === -->
+<div id="rc-earnings-wrap" style="display:none;padding:1.5rem 2.5rem 3rem;">
+  <section class="earnings-viewer">
+    <h2 class="rc-earnings-title">RC Earnings Upload</h2>
+    <p class="rc-earnings-help">Upload the Repair Center CSV. COMP and NFF count as completed repairs; BER counts as BER. Weekend work is excluded. Re-uploading a file updates matching repair tags without duplicating earnings.</p>
+    <label class="rc-earnings-file">
+      <span>Choose RC earnings CSV</span>
+      <input id="rc-earnings-file" type="file" accept=".csv,text/csv" onchange="handleRCEarningsFile(this)"/>
+    </label>
+    <div id="rc-earnings-admin-status" role="status" aria-live="polite"></div>
+    <div id="rc-earnings-preview" style="display:none;">
+      <h3 id="rc-earnings-preview-title"></h3>
+      <p id="rc-earnings-preview-summary" class="rc-earnings-help"></p>
+      <p class="rc-earnings-help">Check each person’s display name and department before importing. New users will be added to the app roster.</p>
+      <div class="rc-earnings-people">
+        <table>
+          <thead><tr><th>CSV user</th><th>Display name</th><th>Department</th></tr></thead>
+          <tbody id="rc-earnings-people-body"></tbody>
+        </table>
+      </div>
+      <div class="rc-earnings-actions">
+        <button id="rc-earnings-import-btn" class="earnings-tab" onclick="importRCEarnings()" disabled>Import earnings</button>
+      </div>
+    </div>
+  </section>
 </div>
 
 <!-- === HISTORY & COMMISSION TRACKER TAB === -->

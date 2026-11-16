@@ -2,13 +2,13 @@
 
 ## Files (Root GitHub Pages Bundle)
 - `index.html`: App shell, tabs, tables, 10 modal overlays, script load order (`XLSX` -> Firebase -> `firebase-sync.js` -> `app.js`)
-- `earnings.html`: Public earnings viewer plus an admin-PIN-protected RC CSV importer with user/department setup
+- `earnings.html`: Standalone public earnings viewer with month selection, bonus tracker, and PIN-protected days-worked adjustment
 - `style.css`: Dark/light CSS variables, layout, tables, tick/BER counters, modals, print stylesheet, role visibility
 - `firebase-sync.js`: Firebase init, seed tables (`DCD_PARTS`, `GRADE_SEED`, `DEPT_SEED`), auth/PIN, requests, live sync, part CRUD, admin upload
 - `app.js`: Theme, Priority List loader/filter/sort, stock math, tick/BER counters, Completed Today, History, KPI CSV importer, Commission Tracker
 - `logo.png`: Vista Technology Support PNG logo shared by login screen & header
 
-## HTML Modal IDs (`index.html`)
+## HTML Modal IDs (`DCD_Priority_Tool.html`)
 - `login-screen` (public earnings viewer, PIN-gated sign-in & dept notice) | `modal-overlay` (Add Part to Completed)
 - `admin-overlay` (Admin PowerBI/Backorder file upload & download) | `adjust-overlay` (Stock adjustment)
 - `newpart-overlay` (Admin add custom part) | `manage-overlay` (Manage parts, `?` ungraded, `!` new, `~` none, Excel export/import)
@@ -18,8 +18,8 @@
 
 ## Key Element IDs (`index.html`)
 - **Header & Auth**: `active-user-badge`, `admin-btn`, `pin-btn`, `theme-toggle`, `date-badge`, `last-updated`, `live-status`, `dept-select`
-- **Public Earnings (`earnings.html`)**: `earnings-user-select`, `public-earnings-month`, `public-earnings-status`, `public-earnings-content`, `public-earnings-days`, `public-earnings-bonus`, `public-earnings-total-bonus`, `public-earnings-target-bars`, `public-earnings-body`; admin RC import uses `rc-earnings-admin`, `rc-earnings-file`, `rc-earnings-people-body`
-- **Stats & Tabs**: `loading-bar`, `error-msg`, `stats-bar` (`stat-r1`, `stat-r2`, `stat-total`, `stat-rep-total`, `stat-stock-total`, `stat-done`, `stat-ber-today`), `tab-bar` (`tab-count-main`, `tab-count-done`, `tab-count-history`)
+- **Public Earnings (`earnings.html`)**: `earnings-user-select`, `public-earnings-month`, `public-earnings-status`, `public-earnings-content`, `public-earnings-days`, `public-earnings-bonus`, `public-earnings-total-bonus`, `public-earnings-target-bars`, `public-earnings-body`
+- **Stats & Tabs**: `loading-bar`, `error-msg`, `stats-bar` (`stat-r1`, `stat-r2`, `stat-total`, `stat-rep-total`, `stat-stock-total`, `stat-done`, `stat-ber-today`), `tab-bar` (`tab-count-main`, `tab-count-done`, `tab-count-history`, `rc-earnings-tab`); admin import uses `rc-earnings-wrap`, `rc-earnings-file`, `rc-earnings-people-body`
 - **Priority List**: `actions-bar` (`search-input`, `show-done-btn`, `new-btn`, `hidden-btn`, `requests-btn`, `print-menu`, `row-count`), `table-wrap`, `table-body`, `zero-section`, `zero-body`
 - **Completed & History**: `completed-wrap`, `earnings-bar`, `completed-body`, `history-wrap`, `month-filter-bar`, `month-summary-card`, `ms-grade-breakdown`, `target-tracker` (`bar-18`, `bar-21`, `bar-24`), `history-body`, `ungraded-section`, `hist-import-section` (`import-drop-zone`, `import-preview-body`)
 

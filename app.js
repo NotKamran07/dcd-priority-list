@@ -1980,6 +1980,32 @@ function populateEarningsUsers(selectedUserId) {
   select.value = selectedUserId || '';
 }
 
+const RC_EARNINGS_USER_DETAILS = {
+  ADAMWOODGAIGER: { name: 'Adam Wood-Gaiger', initials: 'AW', color: '#14b8a6' },
+  ASHLEYPEARCE: { name: 'Ashley Pearce', initials: 'AP', color: '#84cc16' },
+  BARRYDAVID: { name: 'Barry David', initials: 'BD', color: '#f97316' },
+  CHARLIEEVANS: { name: 'Charlie Evans', initials: 'CE', color: '#06b6d4' },
+  CHRISSTAMATARAS: { name: 'Chris Stamataras', initials: 'CS', color: '#eab308' },
+  DANIELHG: { name: 'Daniel HG', initials: 'DH', color: '#8b5cf6' },
+  DAVIDHALE: { name: 'David Hale', initials: 'DH', color: '#f59e0b' },
+  ETHANOHARA: { name: "Ethan O'Hara", initials: 'EO', color: '#ef4444' },
+  FRANCISCONUNES: { name: 'Francisco Nunes', initials: 'FN', color: '#22c55e' },
+  GENNIEDULFO: { name: 'Gennie Dulfo', initials: 'GD', color: '#d946ef' },
+  JARREDDAVIES: { name: 'Jarred Davies', initials: 'JD', color: '#0ea5e9' },
+  KAMRANIQBAL: { name: 'Kamran Iqbal', initials: 'KI', color: '#e8523a' },
+  LUCASPAYNE: { name: 'Lucas Payne', initials: 'LP', color: '#a3e635' },
+  LUKEPERRY: { name: 'Luke Perry', initials: 'LP', color: '#a855f7' },
+  MATTHEWCOLLINS: { name: 'Matthew Collins', initials: 'MC', color: '#f43f5e' },
+  MIKEMIDDLETON: { name: 'Mike Middleton', initials: 'MM', color: '#0d9488' },
+  NICKGETHIN: { name: 'Nick Gethin', initials: 'NG', color: '#10b981' },
+  REBECCARYALL: { name: 'Rebecca Ryall', initials: 'RR', color: '#64748b' },
+  SEANOHARA: { name: "Sean O'Hara", initials: 'SO', color: '#facc15' },
+  THOMASBADHAM: { name: 'Thomas Badham', initials: 'TB', color: '#ec4899' },
+  THOMASDENDLE: { name: 'Thomas Dendle', initials: 'TD', color: '#2dd4bf' },
+  VIOLETHH: { name: 'Violet HH', initials: 'VH', color: '#fb7185' },
+  ZAKWATERS: { name: 'Zak Waters', initials: 'ZW', color: '#818cf8' }
+};
+
 async function loadRCEarningsUsers() {
   const snapshot = await db.ref('rcEarningsUsers').once('value');
   const profiles = snapshot.val() || {};
@@ -1989,14 +2015,15 @@ async function loadRCEarningsUsers() {
       throw new Error('Invalid saved RC earnings user profile: ' + id);
     }
     const existing = USERS[id] || {};
-    const name = String(profile.name);
-    const initials = existing.initials || name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+    const details = RC_EARNINGS_USER_DETAILS[id];
+    const name = details ? details.name : String(profile.name);
+    const initials = details ? details.initials : (profile.initials || existing.initials || name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase());
     USERS[id] = {
       ...existing,
       name,
       dept: profile.dept,
       initials: initials || id.slice(0, 2),
-      color: existing.color || '#64748b',
+      color: details ? details.color : (profile.color || existing.color || '#64748b'),
       role: existing.role || 'user'
     };
   });
@@ -2101,11 +2128,12 @@ function parseRCEarningsCSV(text) {
     }
     seenRepairs.add(dedupKey);
     const existing = USERS[userId];
+    const details = RC_EARNINGS_USER_DETAILS[userId];
     if (!people.has(userId)) {
       people.set(userId, {
         id: userId,
         csvName: person,
-        name: existing ? existing.name : person.toLowerCase().replace(/(^|[\s_-])([a-z])/g, (match, sep, letter) => sep + letter.toUpperCase()),
+        name: details ? details.name : (existing ? existing.name : person.toLowerCase().replace(/(^|[\s_-])([a-z])/g, (match, sep, letter) => sep + letter.toUpperCase())),
         dept: existing ? existing.dept : ''
       });
     }
@@ -2203,7 +2231,7 @@ function renderRCEarningsPeople() {
     deptSelect.add(new Option('Choose department', ''));
     [['DCD', 'DCD'], ['PC', 'PC'], ['PCB', 'PCB'], ['Printers', 'Printers & Peripherals']]
       .forEach(([value, label]) => deptSelect.add(new Option(label, value)));
-    if (!USERS[person.id]) deptSelect.add(new Option('No Department — skip user', 'none'));
+    deptSelect.add(new Option('No Department — skip user', 'none'));
     deptSelect.value = person.dept;
     deptSelect.addEventListener('change', updateRCEarningsImportButton);
     deptCell.appendChild(deptSelect);
@@ -2249,11 +2277,17 @@ async function importRCEarnings() {
       const id = row.dataset.userId;
       const name = row.querySelector('input').value.trim();
       const dept = row.querySelector('select').value;
-      if (dept === 'none' && !USERS[id]) return;
+      const details = RC_EARNINGS_USER_DETAILS[id];
+      if (dept === 'none') return;
       if (!id || !/^[A-Za-z0-9_-]+$/.test(id) || !name || !validDepartments.has(dept)) {
         throw new Error('Every CSV user must have a valid display name and department.');
       }
-      profiles.set(id, { name, dept });
+      profiles.set(id, {
+        name: details ? details.name : name,
+        dept,
+        initials: details ? details.initials : name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(),
+        color: details ? details.color : (USERS[id] && USERS[id].color) || '#64748b'
+      });
     });
     if (!profiles.size) throw new Error('Assign a department to at least one user to import earnings.');
     const recordsToImport = rcEarningsImport.records.filter(record => profiles.has(record.userId));
@@ -2295,12 +2329,11 @@ async function importRCEarnings() {
 
     profiles.forEach((profile, id) => {
       const existing = USERS[id] || {};
-      const initials = existing.initials || profile.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
       USERS[id] = {
         ...existing,
         ...profile,
-        initials: initials || id.slice(0, 2),
-        color: existing.color || '#64748b',
+        initials: profile.initials || existing.initials || id.slice(0, 2),
+        color: profile.color || existing.color || '#64748b',
         role: existing.role || 'user'
       };
     });

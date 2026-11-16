@@ -1959,8 +1959,13 @@ let publicEarningsEntries = [];
 let publicEarningsAdjustments = {};
 
 function initEarningsViewer() {
+  populateEarningsUsers('');
+}
+
+function populateEarningsUsers(selectedUserId) {
   const select = document.getElementById('earnings-user-select');
   if (!select) return;
+  select.replaceChildren(new Option('Select a coworker', ''));
   Object.entries(USERS)
     .sort(([, a], [, b]) => a.name.localeCompare(b.name))
     .forEach(([id, user]) => {
@@ -1969,7 +1974,334 @@ function initEarningsViewer() {
       option.textContent = user.name;
       select.appendChild(option);
     });
-  select.value = '';
+  select.value = selectedUserId || '';
+}
+
+async function loadRCEarningsUsers() {
+  const snapshot = await db.ref('rcEarningsUsers').once('value');
+  const profiles = snapshot.val() || {};
+  const validDepartments = new Set(['DCD', 'PC', 'PCB', 'Printers']);
+  Object.entries(profiles).forEach(([id, profile]) => {
+    if (!profile || !/^[A-Za-z0-9_-]+$/.test(id) || !profile.name || !validDepartments.has(profile.dept)) {
+      throw new Error('Invalid saved RC earnings user profile: ' + id);
+    }
+    const existing = USERS[id] || {};
+    const name = String(profile.name);
+    const initials = existing.initials || name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+    USERS[id] = {
+      ...existing,
+      name,
+      dept: profile.dept,
+      initials: initials || id.slice(0, 2),
+      color: existing.color || '#64748b',
+      role: existing.role || 'user'
+    };
+  });
+}
+
+let rcEarningsImport = null;
+
+function showPublicEarningsTab() {
+  document.getElementById('public-earnings').style.display = '';
+  document.getElementById('rc-earnings-admin').style.display = 'none';
+  document.getElementById('earnings-view-tab').classList.add('active');
+  document.getElementById('earnings-admin-tab').classList.remove('active');
+}
+
+function openRCEarningsAdmin() {
+  const adminId = adminUserId();
+  if (!adminId) {
+    document.getElementById('public-earnings-status').textContent = 'Admin account is not configured.';
+    return;
+  }
+  const showAdmin = () => {
+    document.getElementById('public-earnings').style.display = 'none';
+    document.getElementById('rc-earnings-admin').style.display = 'block';
+    document.getElementById('earnings-view-tab').classList.remove('active');
+    document.getElementById('earnings-admin-tab').classList.add('active');
+  };
+  if (isUnlocked(adminId)) showAdmin();
+  else startPinFlow(adminId, showAdmin);
+}
+
+function parseRCEarningsCSV(text) {
+  const table = [];
+  let row = [];
+  let field = '';
+  let quoted = false;
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    if (quoted) {
+      if (char === '"' && text[i + 1] === '"') {
+        field += '"';
+        i++;
+      } else if (char === '"') {
+        quoted = false;
+      } else {
+        field += char;
+      }
+    } else if (char === '"' && field.length === 0) {
+      quoted = true;
+    } else if (char === ',') {
+      row.push(field);
+      field = '';
+    } else if (char === '\n' || char === '\r') {
+      row.push(field);
+      table.push(row);
+      row = [];
+      field = '';
+      if (char === '\r' && text[i + 1] === '\n') i++;
+    } else {
+      field += char;
+    }
+  }
+  if (quoted) throw new Error('CSV contains an unterminated quoted field.');
+  if (field.length || row.length) {
+    row.push(field);
+    table.push(row);
+  }
+  if (!table.length) throw new Error('CSV is empty.');
+
+  const headers = table[0].map((header, index) => String(header).replace(/^\uFEFF/, '').trim().toLowerCase());
+  const required = ['repair_tag', 'part_id1', 'person_id_asgnd_to1', 'close_dttm', 'unit_status'];
+  const indexes = {};
+  required.forEach(header => {
+    indexes[header] = headers.indexOf(header);
+    if (indexes[header] < 0) throw new Error('CSV is missing the required "' + header + '" column.');
+  });
+
+  const validStatuses = new Set(['COMP', 'NFF', 'BER']);
+  const seenRepairs = new Set();
+  const people = new Map();
+  const records = [];
+  const skipped = { weekend: 0, status: 0, invalid: 0, duplicate: 0 };
+  table.slice(1).forEach(cells => {
+    if (!cells.some(cell => String(cell).trim())) return;
+    const value = header => String(cells[indexes[header]] || '').trim();
+    const repairTag = value('repair_tag');
+    const partId = value('part_id1');
+    const person = value('person_id_asgnd_to1');
+    const status = value('unit_status').toUpperCase();
+    const date = parseRCEarningsDate(value('close_dttm'));
+    if (!repairTag || !partId || !person || !date) {
+      skipped.invalid++;
+      return;
+    }
+    if (!validStatuses.has(status)) {
+      skipped.status++;
+      return;
+    }
+    const weekday = new Date(date + 'T00:00:00Z').getUTCDay();
+    if (weekday === 0 || weekday === 6) {
+      skipped.weekend++;
+      return;
+    }
+    const userId = findRCEarningsUserId(person);
+    const dedupKey = userId + ':' + safeKey(repairTag);
+    if (seenRepairs.has(dedupKey)) {
+      skipped.duplicate++;
+      return;
+    }
+    seenRepairs.add(dedupKey);
+    const existing = USERS[userId];
+    if (!people.has(userId)) {
+      people.set(userId, {
+        id: userId,
+        csvName: person,
+        name: existing ? existing.name : person.toLowerCase().replace(/(^|[\s_-])([a-z])/g, (match, sep, letter) => sep + letter.toUpperCase()),
+        dept: existing ? existing.dept : ''
+      });
+    }
+    records.push({ userId, repairTag, partId, date, status });
+  });
+  if (!records.length) throw new Error('No eligible weekday COMP, NFF, or BER rows were found.');
+  return { records, people: [...people.values()], skipped };
+}
+
+function parseRCEarningsDate(value) {
+  const raw = value.trim();
+  let year, month, day;
+  const usDate = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s|$)/);
+  const isoDate = raw.match(/^(\d{4})-(\d{2})-(\d{2})(?:\s|$)/);
+  if (usDate) {
+    month = Number(usDate[1]);
+    day = Number(usDate[2]);
+    year = Number(usDate[3]);
+  } else if (isoDate) {
+    year = Number(isoDate[1]);
+    month = Number(isoDate[2]);
+    day = Number(isoDate[3]);
+  } else {
+    return '';
+  }
+  const parsed = new Date(Date.UTC(year, month - 1, day));
+  if (parsed.getUTCFullYear() !== year || parsed.getUTCMonth() !== month - 1 || parsed.getUTCDate() !== day) return '';
+  return year + '-' + String(month).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+}
+
+function normalizeRCEarningsPerson(value) {
+  return String(value).toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+function findRCEarningsUserId(person) {
+  const normalized = normalizeRCEarningsPerson(person);
+  const matches = Object.entries(USERS).filter(([id, user]) =>
+    normalizeRCEarningsPerson(id) === normalized || normalizeRCEarningsPerson(user.name) === normalized);
+  if (matches.length > 1) throw new Error('CSV user "' + person + '" matches more than one app profile.');
+  if (matches.length === 1) return matches[0][0];
+  const id = normalized;
+  if (!id) throw new Error('CSV contains a user name that cannot be used as a profile ID.');
+  return id;
+}
+
+async function handleRCEarningsFile(input) {
+  const file = input.files && input.files[0];
+  if (!file) return;
+  const status = document.getElementById('rc-earnings-admin-status');
+  const preview = document.getElementById('rc-earnings-preview');
+  const importButton = document.getElementById('rc-earnings-import-btn');
+  preview.style.display = 'none';
+  importButton.disabled = true;
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Reading ' + file.name + '…';
+  try {
+    rcEarningsImport = parseRCEarningsCSV(await file.text());
+    document.getElementById('rc-earnings-preview-title').textContent =
+      'Preview — ' + rcEarningsImport.records.length + ' repair rows';
+    const skipped = rcEarningsImport.skipped;
+    document.getElementById('rc-earnings-preview-summary').textContent =
+      skipped.weekend + ' weekend rows, ' + skipped.status + ' unsupported statuses, ' +
+      skipped.invalid + ' invalid rows, and ' + skipped.duplicate + ' duplicate repair tags will be skipped.';
+    renderRCEarningsPeople();
+    preview.style.display = 'block';
+    status.textContent = 'Review the user list and department assignments before importing.';
+    updateRCEarningsImportButton();
+  } catch (error) {
+    rcEarningsImport = null;
+    status.style.color = 'var(--accent)';
+    status.textContent = 'Unable to read RC earnings CSV: ' + error.message;
+  } finally {
+    input.value = '';
+  }
+}
+
+function renderRCEarningsPeople() {
+  const tbody = document.getElementById('rc-earnings-people-body');
+  tbody.replaceChildren();
+  rcEarningsImport.people.forEach(person => {
+    const row = document.createElement('tr');
+    row.dataset.userId = person.id;
+    const csvName = document.createElement('td');
+    csvName.textContent = person.csvName;
+    const nameCell = document.createElement('td');
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.value = person.name;
+    nameInput.setAttribute('aria-label', 'Display name for ' + person.csvName);
+    nameInput.addEventListener('input', updateRCEarningsImportButton);
+    nameCell.appendChild(nameInput);
+    const deptCell = document.createElement('td');
+    const deptSelect = document.createElement('select');
+    deptSelect.setAttribute('aria-label', 'Department for ' + person.csvName);
+    deptSelect.add(new Option('Choose department', ''));
+    [['DCD', 'DCD'], ['PC', 'PC'], ['PCB', 'PCB'], ['Printers', 'Printers & Peripherals']]
+      .forEach(([value, label]) => deptSelect.add(new Option(label, value)));
+    deptSelect.value = person.dept;
+    deptSelect.addEventListener('change', updateRCEarningsImportButton);
+    deptCell.appendChild(deptSelect);
+    row.append(csvName, nameCell, deptCell);
+    tbody.appendChild(row);
+  });
+}
+
+function updateRCEarningsImportButton() {
+  const rows = [...document.querySelectorAll('#rc-earnings-people-body tr')];
+  const ready = rows.length > 0 && rows.every(row =>
+    row.querySelector('input').value.trim() && row.querySelector('select').value);
+  document.getElementById('rc-earnings-import-btn').disabled = !ready;
+}
+
+async function importRCEarnings() {
+  const adminId = adminUserId();
+  if (!adminId || !isUnlocked(adminId) || !rcEarningsImport) return;
+  const button = document.getElementById('rc-earnings-import-btn');
+  const status = document.getElementById('rc-earnings-admin-status');
+  button.disabled = true;
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Importing RC earnings…';
+  try {
+    const profiles = new Map();
+    document.querySelectorAll('#rc-earnings-people-body tr').forEach(row => {
+      const id = row.dataset.userId;
+      const name = row.querySelector('input').value.trim();
+      const dept = row.querySelector('select').value;
+      if (!id || !/^[A-Za-z0-9_-]+$/.test(id) || !name || !dept) {
+        throw new Error('Every CSV user must have a valid display name and department.');
+      }
+      profiles.set(id, { name, dept });
+    });
+
+    const gradeSnapshot = await GRADES_REF.once('value');
+    const gradeMap = Object.assign({}, GRADE_SEED);
+    Object.values(gradeSnapshot.val() || {}).forEach(entry => {
+      if (entry && entry.partId && entry.grade) gradeMap[entry.partId] = entry.grade;
+    });
+    const updates = {};
+    const createdCount = [...profiles.keys()].filter(id => !Object.prototype.hasOwnProperty.call(USERS, id)).length;
+    profiles.forEach((profile, id) => {
+      updates['rcEarningsUsers/' + id] = profile;
+    });
+    rcEarningsImport.records.forEach(record => {
+      const cls = gradeMap[record.partId] || '';
+      const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
+      const isBer = record.status === 'BER';
+      const count = isBer ? 0 : 1;
+      const berCount = isBer ? 1 : 0;
+      const earned = (val * count) + (berCount * 0.10);
+      const entry = {
+        partId: record.partId,
+        count,
+        berCount,
+        cls,
+        val,
+        earned,
+        berEarned: berCount * 0.10,
+        type: isBer ? 'ber' : 'tick',
+        source: 'rc',
+        repairTag: record.repairTag
+      };
+      const historyKey = 'rc_' + safeKey(record.repairTag);
+      updates['users/' + record.userId + '/history/' + record.date + '/' + historyKey] = entry;
+    });
+    await db.ref().update(updates);
+
+    profiles.forEach((profile, id) => {
+      const existing = USERS[id] || {};
+      const initials = existing.initials || profile.name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase();
+      USERS[id] = {
+        ...existing,
+        ...profile,
+        initials: initials || id.slice(0, 2),
+        color: existing.color || '#64748b',
+        role: existing.role || 'user'
+      };
+    });
+    const selectedUserId = document.getElementById('earnings-user-select').value;
+    populateEarningsUsers(selectedUserId);
+    if (selectedUserId) await loadPublicEarnings(selectedUserId);
+    status.style.color = 'var(--green)';
+    const skipped = rcEarningsImport.skipped;
+    status.textContent = 'Imported ' + rcEarningsImport.records.length + ' repair rows. Skipped ' +
+      skipped.weekend + ' weekend, ' + skipped.status + ' unsupported-status, ' +
+      skipped.invalid + ' invalid, and ' + skipped.duplicate + ' duplicate rows.';
+    document.getElementById('rc-earnings-preview').style.display = 'none';
+    rcEarningsImport = null;
+    if (createdCount) status.textContent += ' Created ' + createdCount + ' user profile' + (createdCount === 1 ? '' : 's') + '.';
+  } catch (error) {
+    status.style.color = 'var(--accent)';
+    status.textContent = 'RC earnings import failed: ' + error.message;
+    button.disabled = false;
+  }
 }
 
 async function loadPublicEarnings(userId) {
@@ -2174,7 +2506,17 @@ async function adjustPublicDaysWorked(delta) {
 }
 
 // === APP BOOTSTRAP ===
-function initApp() {
+async function initApp() {
+  try {
+    await loadRCEarningsUsers();
+  } catch (error) {
+    console.error('Unable to load saved RC earnings users', error);
+    const status = document.getElementById('public-earnings-status') || document.getElementById('login-note');
+    if (status) {
+      status.textContent = 'Additional user profiles could not be loaded. Please refresh or contact the admin.';
+      status.style.display = 'block';
+    }
+  }
   if (document.getElementById('earnings-user-select')) {
     initEarningsViewer();
     return;

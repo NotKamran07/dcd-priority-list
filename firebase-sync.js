@@ -68,7 +68,8 @@ const USERS = {
   KamranIqbal:  { name: 'Kamran Iqbal',  initials: 'KI', color: '#e8523a', dept: 'DCD', role: 'admin' },
   HusseinMader: { name: 'Hussein Mader', initials: 'HM', color: '#3a7bd5', dept: 'DCD', role: 'user' },
   LukePerry:    { name: 'Luke Perry',    initials: 'LP', color: '#a855f7', dept: 'DCD', role: 'user' },
-  NickGethin:    { name: 'Nick Gethin',    initials: 'NG', color: '#10b981', dept: 'PC',  role: 'user' }
+  NickGethin: { name: 'Nick Gethin', initials: 'NG', color: '#10b981', dept: 'PC', role: 'user' },
+  DavidHale:  { name: 'David Hale',  initials: 'DH', color: '#f59e0b', dept: 'Printers', role: 'user' }
 };
 
 const ADMIN_PWD = 'Vista123@';

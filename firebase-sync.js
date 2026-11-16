@@ -243,12 +243,43 @@ function updateSwitchUI() {
 }
 
 // mode: 'admin' = only the admin's card, 'one' = a single person's card, 'all' = everyone (admin switching), 'none' = nobody
+let loginCardsMode = 'admin';
+let loginCardsUserId = null;
+let loginCardsMessage = null;
+
 function showLoginCards(mode, userId, message) {
+  loginCardsMode = mode;
+  loginCardsUserId = userId;
+  loginCardsMessage = message;
   const adminId = adminUserId();
-  document.querySelectorAll('.user-card').forEach(c => {
-    const id = c.dataset.user;
-    const show = mode === 'all' || (mode === 'admin' && id === adminId) || (mode === 'one' && id === userId);
-    c.style.display = show ? '' : 'none';
+  const selectedDept = document.getElementById('dept-select').value;
+  const cards = document.querySelector('.user-cards');
+  cards.replaceChildren();
+  Object.entries(USERS).forEach(([id, user]) => {
+    const show = user.dept === selectedDept &&
+      (mode === 'all' || (mode === 'admin' && id === adminId) || (mode === 'one' && id === userId));
+    if (!show) return;
+
+    const card = document.createElement('div');
+    card.className = 'user-card';
+    card.dataset.user = id;
+    card.addEventListener('click', () => loginAs(id));
+
+    const avatar = document.createElement('div');
+    avatar.className = 'user-avatar';
+    avatar.style.background = user.color;
+    avatar.textContent = user.initials;
+
+    const name = document.createElement('div');
+    name.className = 'user-card-name';
+    name.textContent = user.name;
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'user-card-sub';
+    subtitle.textContent = 'Tap to sign in';
+
+    card.append(avatar, name, subtitle);
+    cards.appendChild(card);
   });
   const wrap = document.getElementById('dept-wrap');
   if (wrap) wrap.style.display = (mode === 'none' || (mode === 'one' && userId !== adminId)) ? 'none' : '';
@@ -260,6 +291,7 @@ function initLoginFromLink(search) {
   const u = new URLSearchParams(search !== undefined ? search : location.search).get('user');
   if (!u) { showLoginCards('admin'); return; }
   if (!USERS[u]) { showLoginCards('none', null, "This link isn't valid. Ask the admin for your personal link."); return; }
+  document.getElementById('dept-select').value = USERS[u].dept;
   showLoginCards('one', u);
   loginAs(u);   // asks for the PIN, or goes straight in if this tab is already unlocked
 }
@@ -339,9 +371,13 @@ function loginAs(userId) {
 function onDeptChange(sel) {
   const notice = document.getElementById('dept-notice');
   const names = { PC: 'PC', PCB: 'PCB', Printers: 'Printers & Peripherals' };
-  if (sel.value === 'DCD') { notice.style.display = 'none'; return; }
-  notice.textContent = names[sel.value] + " isn't set up yet — ask your admin to add it, then switch back to DCD for now.";
-  notice.style.display = 'block';
+  if (sel.value === 'DCD') {
+    notice.style.display = 'none';
+  } else {
+    notice.textContent = names[sel.value] + " isn't set up yet — ask your admin to add it, then switch back to DCD for now.";
+    notice.style.display = 'block';
+  }
+  showLoginCards(loginCardsMode, loginCardsUserId, loginCardsMessage);
 }
 
 function switchUser() {

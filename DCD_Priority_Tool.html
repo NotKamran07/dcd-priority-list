@@ -50,6 +50,7 @@
         <div class="stat"><span class="stat-label">Parts Completed</span><span class="stat-value" id="public-earnings-parts">0</span></div>
         <div class="stat"><span class="stat-label">Total Repairs</span><span class="stat-value" id="public-earnings-repairs">0</span></div>
         <div class="stat"><span class="stat-label">Total Earned</span><span class="stat-value" id="public-earnings-total" style="color:var(--green);">£0.00</span></div>
+        <div class="stat"><span class="stat-label">Avg Repairs / Day</span><span class="stat-value" id="public-earnings-average">0</span></div>
         <div class="stat">
           <span class="stat-label">Days Worked</span>
           <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
@@ -58,6 +59,18 @@
             <button onclick="adjustPublicDaysWorked(0.5)" aria-label="Increase days worked; requires your PIN" title="Requires your PIN" style="font-family:'Syne',sans-serif;font-weight:700;font-size:0.75rem;width:24px;height:24px;border-radius:3px;border:1px solid var(--border);background:var(--surface2);color:var(--text);cursor:pointer;line-height:1;">+</button>
           </div>
         </div>
+        <div class="stat">
+          <span class="stat-label">Commission Bonus</span>
+          <div>
+            <span class="commission-badge" id="public-earnings-bonus-badge">Not reached</span>
+            <div class="stat-value" id="public-earnings-bonus" style="color:var(--muted);">£0</div>
+          </div>
+        </div>
+        <div class="stat"><span class="stat-label">Total with Bonus</span><span class="stat-value" id="public-earnings-total-bonus" style="color:var(--green);">£0.00</span></div>
+      </div>
+      <div id="public-earnings-target-tracker" class="target-tracker" style="max-width:460px;margin:0 0 1rem;">
+        <div class="target-tracker-title">Monthly Bonus Tracker</div>
+        <div id="public-earnings-target-bars" class="target-bars"></div>
       </div>
       <div class="earnings-viewer-table">
         <table>

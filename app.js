@@ -2073,12 +2073,73 @@ function renderPublicEarnings() {
   const baseDays = workedDays.size;
   const adjustedDays = Math.max(baseDays > 0 ? 0.5 : 0, baseDays + (Number(publicEarningsAdjustments[month]) || 0));
   document.getElementById('public-earnings-days').textContent = adjustedDays % 1 === 0 ? String(adjustedDays) : adjustedDays.toFixed(1);
+  const average = adjustedDays > 0 ? repairs / adjustedDays : 0;
+  const commission = calcCommission(average, month);
+  document.getElementById('public-earnings-average').textContent = average.toFixed(1);
+  document.getElementById('public-earnings-bonus-badge').textContent = commission.label;
+  document.getElementById('public-earnings-bonus-badge').style.background = commission.color;
+  document.getElementById('public-earnings-bonus').textContent = commission.amount > 0 ? '+£' + commission.amount : '£0';
+  document.getElementById('public-earnings-bonus').style.color = commission.amount > 0 ? 'var(--green)' : 'var(--muted)';
+  document.getElementById('public-earnings-total-bonus').textContent = '£' + (earned + commission.amount).toFixed(2);
+  renderPublicEarningsTargetTracker(repairs, adjustedDays, month);
   const monthLabel = month
     ? new Date(month + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
     : 'selected month';
   document.getElementById('public-earnings-status').textContent = entries.length
     ? USERS[publicEarningsUserId].name + "'s earnings for " + monthLabel + '.'
     : 'No earnings recorded for ' + monthLabel + '.';
+}
+
+function renderPublicEarningsTargetTracker(totalRepairs, adjustedDays, month) {
+  const container = document.getElementById('public-earnings-target-bars');
+  container.replaceChildren();
+  const isNewTargets = month >= '2026-07';
+  const targets = isNewTargets
+    ? [{ target: 11, bonus: 25, color: '#f0c040' }, { target: 13, bonus: 50, color: '#f0a040' }, { target: 15, bonus: 75, color: '#2ecc71' }]
+    : [{ target: 18, bonus: 25, color: '#f0c040' }, { target: 21, bonus: 50, color: '#f0a040' }, { target: 24, bonus: 75, color: '#2ecc71' }];
+  const average = adjustedDays > 0 ? totalRepairs / adjustedDays : 0;
+  const currentMonth = TODAY.slice(0, 7);
+  const isPastMonth = month < currentMonth;
+  const [year, monthNumber] = month.split('-').map(Number);
+  const workingDaysInMonth = Math.round(new Date(year, monthNumber, 0).getDate() * 22 / 30);
+  const remainingDays = Math.max(0, workingDaysInMonth - adjustedDays);
+
+  targets.forEach(({ target, bonus, color }) => {
+    const row = document.createElement('div');
+    row.className = 'target-bar-wrap';
+    const label = document.createElement('div');
+    label.className = 'target-bar-label';
+    label.textContent = target + '/day';
+    const bonusLabel = document.createElement('span');
+    bonusLabel.className = 'target-bonus';
+    bonusLabel.style.color = color;
+    bonusLabel.textContent = '+£' + bonus;
+    const track = document.createElement('div');
+    track.className = 'target-bar-track';
+    const fill = document.createElement('div');
+    fill.className = 'target-bar-fill';
+    fill.style.width = Math.min(100, average / target * 100).toFixed(1) + '%';
+    fill.style.background = color;
+    track.appendChild(fill);
+    const percentage = document.createElement('div');
+    percentage.className = 'target-bar-pct';
+    percentage.textContent = Math.min(100, average / target * 100).toFixed(0) + '%';
+    const status = document.createElement('div');
+    status.className = 'target-status';
+    if (average >= target) {
+      status.textContent = isPastMonth ? '✓ Achieved' : '✓ On track';
+      status.style.color = 'var(--green)';
+    } else if (isPastMonth) {
+      status.textContent = (target - average).toFixed(1) + ' short';
+      status.style.color = 'var(--accent)';
+    } else {
+      const extraNeeded = Math.max(0, target * workingDaysInMonth - totalRepairs);
+      status.textContent = '+' + (remainingDays > 0 ? (extraNeeded / remainingDays).toFixed(1) : '∞') + '/day';
+      status.style.color = 'var(--accent)';
+    }
+    row.append(label, bonusLabel, track, percentage, status);
+    container.appendChild(row);
+  });
 }
 
 async function adjustPublicDaysWorked(delta) {

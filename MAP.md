@@ -17,7 +17,7 @@
 
 ## Key Element IDs (`index.html`)
 - **Header & Auth**: `active-user-badge`, `admin-btn`, `pin-btn`, `theme-toggle`, `date-badge`, `last-updated`, `live-status`, `dept-select`
-- **Public Earnings**: `earnings-user-select`, `public-earnings-month`, `public-earnings-status`, `public-earnings-content`, `public-earnings-days`, `public-earnings-body`
+- **Public Earnings**: `earnings-user-select`, `public-earnings-month`, `public-earnings-status`, `public-earnings-content`, `public-earnings-days`, `public-earnings-bonus`, `public-earnings-total-bonus`, `public-earnings-target-bars`, `public-earnings-body`
 - **Stats & Tabs**: `loading-bar`, `error-msg`, `stats-bar` (`stat-r1`, `stat-r2`, `stat-total`, `stat-rep-total`, `stat-stock-total`, `stat-done`, `stat-ber-today`), `tab-bar` (`tab-count-main`, `tab-count-done`, `tab-count-history`)
 - **Priority List**: `actions-bar` (`search-input`, `show-done-btn`, `new-btn`, `hidden-btn`, `requests-btn`, `print-menu`, `row-count`), `table-wrap`, `table-body`, `zero-section`, `zero-body`
 - **Completed & History**: `completed-wrap`, `earnings-bar`, `completed-body`, `history-wrap`, `month-filter-bar`, `month-summary-card`, `ms-grade-breakdown`, `target-tracker` (`bar-18`, `bar-21`, `bar-24`), `history-body`, `ungraded-section`, `hist-import-section` (`import-drop-zone`, `import-preview-body`)

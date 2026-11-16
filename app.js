@@ -1235,8 +1235,9 @@ function parseImportCSV(text) {
     if (dayOfWeek === 0 || dayOfWeek === 6) return; // 0=Sunday, 6=Saturday
 
     const key = isoDate + '__' + partId + '__' + normStatus;
-    if (!grouped[key]) grouped[key] = { date: isoDate, partId, status: normStatus, qty: 0 };
+    if (!grouped[key]) grouped[key] = { date: isoDate, partId, status: normStatus, qty: 0, repairTags: {} };
     grouped[key].qty += 1; // each unique repair tag = 1 job
+    if (repairTag) grouped[key].repairTags[safeKey(repairTag)] = repairTag;
   });
 
   importData = Object.values(grouped).map(g => {
@@ -1246,7 +1247,7 @@ function parseImportCSV(text) {
     const repairs = isComp ? g.qty : 0;
     const ber = isComp ? 0 : g.qty;
     const earned = (val * repairs) + (ber * 0.10);
-    return { date: g.date, partId: g.partId, repairs, ber, cls, val, earned };
+    return { date: g.date, partId: g.partId, repairs, ber, cls, val, earned, repairTags: g.repairTags };
   }).filter(r => r.repairs > 0 || r.ber > 0)
     .sort((a, b) => a.date.localeCompare(b.date) || a.partId.localeCompare(b.partId));
 
@@ -1282,33 +1283,55 @@ function renderImportPreview(errors) {
   });
 }
 
-function confirmImport() {
+async function confirmImport() {
   if (!importData.length || !currentUser) return;
 
-  // Group importData by date+partId to get definitive counts from this file
-  // Use SET (not ADD) so re-importing the same file doesn't duplicate
-  importData.forEach(r => {
-    const key = safeKey(r.partId);
-    const histKey = r.repairs > 0 ? key : ('ber_' + key);
-    HISTORY_REF.child(r.date).child(histKey).transaction(entry => {
-      if (!entry) {
-        // New entry - set from import
-        return { partId: r.partId, count: r.repairs, cls: r.cls, val: r.val, earned: r.earned, berCount: r.ber, berEarned: r.ber * 0.10, type: r.repairs > 0 ? 'tick' : 'ber' };
-      }
-      // Existing entry — only update if import count is HIGHER (prevents duplicating on re-import)
-      const newCount = Math.max(entry.count || 0, r.repairs);
-      const newBer = Math.max(entry.berCount || 0, r.ber);
-      const newBerEarned = newBer * 0.10;
-      const val = entry.val || r.val;
-      return {
-        ...entry,
-        count: newCount,
-        berCount: newBer,
-        berEarned: newBerEarned,
-        earned: (val * newCount) + newBerEarned
-      };
+  try {
+    const repairTags = new Set();
+    const transactions = importData.map(r => {
+      Object.values(r.repairTags || {}).forEach(tag => repairTags.add(String(tag)));
+      const key = safeKey(r.partId);
+      const histKey = r.repairs > 0 ? key : ('ber_' + key);
+      return HISTORY_REF.child(r.date).child(histKey).transaction(entry => {
+        const newCount = Math.max(Number(entry && entry.count) || 0, r.repairs);
+        const newBer = Math.max(Number(entry && entry.berCount) || 0, r.ber);
+        const newBerEarned = newBer * 0.10;
+        const val = (entry && entry.val) || r.val;
+        const savedRepairTags = Object.assign({}, entry && entry.repairTags || {}, r.repairTags || {});
+        return {
+          ...(entry || {}),
+          partId: r.partId,
+          count: newCount,
+          cls: (entry && entry.cls) || r.cls,
+          val,
+          earned: (val * newCount) + newBerEarned,
+          berCount: newBer,
+          berEarned: newBerEarned,
+          type: r.repairs > 0 ? 'tick' : 'ber',
+          repairTags: savedRepairTags
+        };
+      });
     });
-  });
+    await Promise.all(transactions);
+
+    if (repairTags.size > 0) {
+      const snapshot = await HISTORY_REF.once('value');
+      const history = snapshot.val() || {};
+      const duplicateUpdates = {};
+      Object.entries(history).forEach(([date, day]) => {
+        if (date === '_meta' || !day) return;
+        Object.entries(day).forEach(([key, entry]) => {
+          if (!key.startsWith('rc_') || !entry) return;
+          const repairTag = String(entry.repairTag || key.slice(3));
+          if (repairTags.has(repairTag)) duplicateUpdates[date + '/' + key] = null;
+        });
+      });
+      if (Object.keys(duplicateUpdates).length > 0) await HISTORY_REF.update(duplicateUpdates);
+    }
+  } catch (error) {
+    showImportError('Import failed: ' + error.message);
+    return;
+  }
 
   const importedCount = importData.length;
   clearImportPreview();
@@ -2179,6 +2202,60 @@ function findRCEarningsUserId(person) {
   return id;
 }
 
+function reconcileRCEarningsHistory(history, records, gradeMap) {
+  const dailyRepairTags = new Set();
+  Object.entries(history).forEach(([date, day]) => {
+    if (date === '_meta' || !day) return;
+    Object.entries(day).forEach(([key, entry]) => {
+      if (!entry || key.startsWith('rc_')) return;
+      Object.values(entry.repairTags || {}).forEach(tag => dailyRepairTags.add(safeKey(String(tag))));
+    });
+  });
+
+  const updates = {};
+  const duplicateTags = new Set();
+  Object.entries(history).forEach(([date, day]) => {
+    if (date === '_meta' || !day) return;
+    Object.entries(day).forEach(([key, entry]) => {
+      if (!key.startsWith('rc_') || !entry) return;
+      const repairTag = String(entry.repairTag || key.slice(3));
+      if (!dailyRepairTags.has(safeKey(repairTag))) return;
+      updates[date + '/' + key] = null;
+      duplicateTags.add(safeKey(repairTag));
+    });
+  });
+
+  records.forEach(record => {
+    const historyKey = 'rc_' + safeKey(record.repairTag);
+    const path = record.date + '/' + historyKey;
+    if (dailyRepairTags.has(safeKey(record.repairTag))) {
+      updates[path] = null;
+      duplicateTags.add(safeKey(record.repairTag));
+      return;
+    }
+
+    const cls = gradeMap[record.partId] || '';
+    const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
+    const isBer = record.status === 'BER';
+    const count = isBer ? 0 : 1;
+    const berCount = isBer ? 1 : 0;
+    updates[path] = {
+      partId: record.partId,
+      count,
+      berCount,
+      cls,
+      val,
+      earned: (val * count) + (berCount * 0.10),
+      berEarned: berCount * 0.10,
+      type: isBer ? 'ber' : 'tick',
+      source: 'rc',
+      repairTag: record.repairTag
+    };
+  });
+
+  return { updates, deduplicatedRows: duplicateTags.size };
+}
+
 async function handleRCEarningsFile(input) {
   const file = input.files && input.files[0];
   if (!file) return;
@@ -2298,32 +2375,35 @@ async function importRCEarnings() {
     Object.values(gradeSnapshot.val() || {}).forEach(entry => {
       if (entry && entry.partId && entry.grade) gradeMap[entry.partId] = entry.grade;
     });
+
+    const recordsByUser = new Map();
+    recordsToImport.forEach(record => {
+      if (!recordsByUser.has(record.userId)) {
+        recordsByUser.set(record.userId, []);
+      }
+      recordsByUser.get(record.userId).push(record);
+    });
+
+    const reconciledUsers = await Promise.all([...recordsByUser.entries()].map(async ([userId, records]) => {
+      const historyPath = 'users/' + userId + '/history';
+      const snapshot = await db.ref(historyPath).once('value');
+      return {
+        historyPath,
+        ...reconcileRCEarningsHistory(snapshot.val() || {}, records, gradeMap)
+      };
+    }));
+
     const updates = {};
     const createdCount = [...profiles.keys()].filter(id => !Object.prototype.hasOwnProperty.call(USERS, id)).length;
     profiles.forEach((profile, id) => {
       updates['rcEarningsUsers/' + id] = profile;
     });
-    recordsToImport.forEach(record => {
-      const cls = gradeMap[record.partId] || '';
-      const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
-      const isBer = record.status === 'BER';
-      const count = isBer ? 0 : 1;
-      const berCount = isBer ? 1 : 0;
-      const earned = (val * count) + (berCount * 0.10);
-      const entry = {
-        partId: record.partId,
-        count,
-        berCount,
-        cls,
-        val,
-        earned,
-        berEarned: berCount * 0.10,
-        type: isBer ? 'ber' : 'tick',
-        source: 'rc',
-        repairTag: record.repairTag
-      };
-      const historyKey = 'rc_' + safeKey(record.repairTag);
-      updates['users/' + record.userId + '/history/' + record.date + '/' + historyKey] = entry;
+    let deduplicatedRows = 0;
+    reconciledUsers.forEach(({ historyPath, updates: historyUpdates, deduplicatedRows: userDeduplicatedRows }) => {
+      deduplicatedRows += userDeduplicatedRows;
+      Object.entries(historyUpdates).forEach(([path, entry]) => {
+        updates[historyPath + '/' + path] = entry;
+      });
     });
     await db.ref().update(updates);
 
@@ -2348,7 +2428,8 @@ async function importRCEarnings() {
     status.textContent = 'Imported ' + recordsToImport.length + ' repair rows. Skipped ' +
       skipped.weekend + ' weekend, ' + skipped.status + ' unsupported-status, ' +
       skipped.invalid + ' invalid, ' + skipped.duplicate + ' duplicate, and ' +
-      noDepartmentRows + ' No Department rows. No Department users were not created.';
+      noDepartmentRows + ' No Department rows. Deduplicated ' + deduplicatedRows +
+      ' repairs matched by repair tag. No Department users were not created.';
     document.getElementById('rc-earnings-preview').style.display = 'none';
     rcEarningsImport = null;
     if (createdCount) status.textContent += ' Created ' + createdCount + ' user profile' + (createdCount === 1 ? '' : 's') + '.';

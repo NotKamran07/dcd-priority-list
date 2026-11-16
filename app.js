@@ -2203,6 +2203,7 @@ function renderRCEarningsPeople() {
     deptSelect.add(new Option('Choose department', ''));
     [['DCD', 'DCD'], ['PC', 'PC'], ['PCB', 'PCB'], ['Printers', 'Printers & Peripherals']]
       .forEach(([value, label]) => deptSelect.add(new Option(label, value)));
+    if (!USERS[person.id]) deptSelect.add(new Option('No Department — skip user', 'none'));
     deptSelect.value = person.dept;
     deptSelect.addEventListener('change', updateRCEarningsImportButton);
     deptCell.appendChild(deptSelect);
@@ -2213,9 +2214,24 @@ function renderRCEarningsPeople() {
 
 function updateRCEarningsImportButton() {
   const rows = [...document.querySelectorAll('#rc-earnings-people-body tr')];
-  const ready = rows.length > 0 && rows.every(row =>
-    row.querySelector('input').value.trim() && row.querySelector('select').value);
+  const assignedCount = rows.filter(row => row.querySelector('select').value !== 'none').length;
+  const ready = assignedCount > 0 && rows.every(row => {
+    const department = row.querySelector('select').value;
+    return department === 'none' || (row.querySelector('input').value.trim() && department);
+  });
   document.getElementById('rc-earnings-import-btn').disabled = !ready;
+
+  if (rcEarningsImport) {
+    const excludedUserIds = new Set(rows
+      .filter(row => row.querySelector('select').value === 'none')
+      .map(row => row.dataset.userId));
+    const excludedRows = rcEarningsImport.records.filter(record => excludedUserIds.has(record.userId)).length;
+    const skipped = rcEarningsImport.skipped;
+    document.getElementById('rc-earnings-preview-summary').textContent =
+      skipped.weekend + ' weekend rows, ' + skipped.status + ' unsupported statuses, ' +
+      skipped.invalid + ' invalid rows, ' + skipped.duplicate + ' duplicate repair tags, and ' +
+      excludedRows + ' rows for No Department users will be skipped.';
+  }
 }
 
 async function importRCEarnings() {
@@ -2233,11 +2249,15 @@ async function importRCEarnings() {
       const id = row.dataset.userId;
       const name = row.querySelector('input').value.trim();
       const dept = row.querySelector('select').value;
+      if (dept === 'none' && !USERS[id]) return;
       if (!id || !/^[A-Za-z0-9_-]+$/.test(id) || !name || !validDepartments.has(dept)) {
         throw new Error('Every CSV user must have a valid display name and department.');
       }
       profiles.set(id, { name, dept });
     });
+    if (!profiles.size) throw new Error('Assign a department to at least one user to import earnings.');
+    const recordsToImport = rcEarningsImport.records.filter(record => profiles.has(record.userId));
+    const noDepartmentRows = rcEarningsImport.records.length - recordsToImport.length;
 
     const gradeSnapshot = await GRADES_REF.once('value');
     const gradeMap = Object.assign({}, GRADE_SEED);
@@ -2249,7 +2269,7 @@ async function importRCEarnings() {
     profiles.forEach((profile, id) => {
       updates['rcEarningsUsers/' + id] = profile;
     });
-    rcEarningsImport.records.forEach(record => {
+    recordsToImport.forEach(record => {
       const cls = gradeMap[record.partId] || '';
       const val = typeof GRADE_VALUE[cls] === 'number' ? GRADE_VALUE[cls] : 0;
       const isBer = record.status === 'BER';
@@ -2292,9 +2312,10 @@ async function importRCEarnings() {
     }
     status.style.color = 'var(--green)';
     const skipped = rcEarningsImport.skipped;
-    status.textContent = 'Imported ' + rcEarningsImport.records.length + ' repair rows. Skipped ' +
+    status.textContent = 'Imported ' + recordsToImport.length + ' repair rows. Skipped ' +
       skipped.weekend + ' weekend, ' + skipped.status + ' unsupported-status, ' +
-      skipped.invalid + ' invalid, and ' + skipped.duplicate + ' duplicate rows.';
+      skipped.invalid + ' invalid, ' + skipped.duplicate + ' duplicate, and ' +
+      noDepartmentRows + ' No Department rows. No Department users were not created.';
     document.getElementById('rc-earnings-preview').style.display = 'none';
     rcEarningsImport = null;
     if (createdCount) status.textContent += ' Created ' + createdCount + ' user profile' + (createdCount === 1 ? '' : 's') + '.';

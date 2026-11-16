@@ -1956,7 +1956,7 @@ function closeNewPartModal() {
 let publicEarningsRequestId = 0;
 let publicEarningsUserId = null;
 let publicEarningsEntries = [];
-let publicEarningsPeriod = 'current';
+let publicEarningsAdjustments = {};
 
 function initEarningsViewer() {
   const select = document.getElementById('earnings-user-select');
@@ -2004,13 +2004,16 @@ async function loadPublicEarnings(userId) {
     });
 
     publicEarningsUserId = userId;
-    publicEarningsPeriod = 'current';
-    const tabs = document.querySelectorAll('#public-earnings-period-tabs .hist-sub-btn');
-    tabs.forEach((tab, index) => tab.classList.toggle('active', index === 0));
+    publicEarningsAdjustments = data._meta && data._meta.adj ? data._meta.adj : {};
     const monthSelect = document.getElementById('public-earnings-month');
     monthSelect.replaceChildren();
+    const currentMonth = TODAY.slice(0, 7);
+    const currentOption = document.createElement('option');
+    currentOption.value = currentMonth;
+    currentOption.textContent = new Date(currentMonth + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }) + ' (Current)';
+    monthSelect.appendChild(currentOption);
     const previousMonths = [...new Set(publicEarningsEntries.map(entry => entry.date.slice(0, 7)))]
-      .filter(month => month < TODAY.slice(0, 7))
+      .filter(month => month < currentMonth)
       .sort()
       .reverse();
     previousMonths.forEach(month => {
@@ -2019,7 +2022,7 @@ async function loadPublicEarnings(userId) {
       option.textContent = new Date(month + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
       monthSelect.appendChild(option);
     });
-    monthSelect.value = previousMonths[0] || '';
+    monthSelect.value = currentMonth;
     content.style.display = 'block';
     renderPublicEarnings();
   } catch (error) {
@@ -2029,28 +2032,20 @@ async function loadPublicEarnings(userId) {
   }
 }
 
-function setPublicEarningsPeriod(period, button) {
-  publicEarningsPeriod = period;
-  document.querySelectorAll('#public-earnings-period-tabs .hist-sub-btn').forEach(tab => tab.classList.remove('active'));
-  button.classList.add('active');
-  document.getElementById('public-earnings-month').style.display = period === 'previous' ? '' : 'none';
-  renderPublicEarnings();
-}
-
 function renderPublicEarnings() {
   if (!publicEarningsUserId) return;
-  const month = publicEarningsPeriod === 'current'
-    ? TODAY.slice(0, 7)
-    : document.getElementById('public-earnings-month').value;
+  const month = document.getElementById('public-earnings-month').value;
   const entries = month ? publicEarningsEntries.filter(entry => entry.date.startsWith(month)) : [];
   const tbody = document.getElementById('public-earnings-body');
   tbody.replaceChildren();
 
   let repairs = 0;
   let earned = 0;
+  const workedDays = new Set();
   entries.forEach((entry, index) => {
     if (!entry.isBerOnly) repairs += entry.count;
     earned += entry.earned;
+    if (entry.count > 0 || entry.berCount > 0) workedDays.add(entry.date);
     const row = document.createElement('tr');
     const date = document.createElement('td');
     date.textContent = formatHistoryDate(entry.date);
@@ -2075,12 +2070,46 @@ function renderPublicEarnings() {
   document.getElementById('public-earnings-parts').textContent = String(entries.length);
   document.getElementById('public-earnings-repairs').textContent = String(repairs);
   document.getElementById('public-earnings-total').textContent = '£' + earned.toFixed(2);
+  const baseDays = workedDays.size;
+  const adjustedDays = Math.max(baseDays > 0 ? 0.5 : 0, baseDays + (Number(publicEarningsAdjustments[month]) || 0));
+  document.getElementById('public-earnings-days').textContent = adjustedDays % 1 === 0 ? String(adjustedDays) : adjustedDays.toFixed(1);
   const monthLabel = month
     ? new Date(month + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
-    : 'previous months';
+    : 'selected month';
   document.getElementById('public-earnings-status').textContent = entries.length
     ? USERS[publicEarningsUserId].name + "'s earnings for " + monthLabel + '.'
     : 'No earnings recorded for ' + monthLabel + '.';
+}
+
+async function adjustPublicDaysWorked(delta) {
+  const userId = publicEarningsUserId;
+  const month = document.getElementById('public-earnings-month').value;
+  if (!userId || !month) return;
+  const entries = publicEarningsEntries;
+  const adjustments = publicEarningsAdjustments;
+
+  const saveAdjustment = async () => {
+    const baseDays = new Set(entries
+      .filter(entry => entry.date.startsWith(month) && (entry.count > 0 || entry.berCount > 0))
+      .map(entry => entry.date)).size;
+    const currentAdjustment = Number(adjustments[month]) || 0;
+    const minimumDays = baseDays > 0 ? 0.5 : 0;
+    const nextAdjustment = Math.max(-(baseDays - minimumDays), currentAdjustment + delta);
+    try {
+      await db.ref('users/' + userId + '/history/_meta/adj/' + month).set(nextAdjustment);
+      adjustments[month] = nextAdjustment;
+      if (publicEarningsUserId === userId && document.getElementById('public-earnings-month').value === month) {
+        renderPublicEarnings();
+      }
+    } catch (error) {
+      if (publicEarningsUserId === userId && document.getElementById('public-earnings-month').value === month) {
+        document.getElementById('public-earnings-status').textContent = 'Unable to save the days-worked adjustment.';
+      }
+      console.error('Unable to adjust days worked for ' + userId, error);
+    }
+  };
+
+  await startPinFlow(userId, saveAdjustment);
 }
 
 // === APP BOOTSTRAP ===

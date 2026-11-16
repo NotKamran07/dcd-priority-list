@@ -111,6 +111,7 @@ let adminLoggedIn = false;
 let pinMode = 'enter';   // 'enter' | 'create' | 'change'
 let pinUser = null;
 let pinStoredHash = null;
+let pinOnSuccess = null;
 
 const unlockedUsers = {};   // in-memory backup in case browser storage is blocked
 function isUnlocked(userId) {
@@ -139,13 +140,15 @@ async function hashPin(userId, pin) {
   return 'f' + h1.toString(16) + h2.toString(16);
 }
 
-async function startPinFlow(userId) {
+async function startPinFlow(userId, onSuccess) {
   pinUser = userId;
+  pinOnSuccess = onSuccess || null;
   try {
     const snap = await db.ref('userPins/' + userId).once('value');
     const v = snap.val();
     pinStoredHash = v && v.hash ? v.hash : null;
   } catch (e) {
+    pinOnSuccess = null;
     alert('Could not reach the database to check your PIN. Check your connection and try again.');
     return;
   }
@@ -174,6 +177,7 @@ function showPinModal(mode) {
 
 function closePinModal() {
   document.getElementById('pin-overlay').style.display = 'none';
+  pinOnSuccess = null;
 }
 
 async function openChangePin() {
@@ -189,9 +193,11 @@ async function openChangePin() {
 
 function finishUnlock() {
   const u = pinUser;
+  const onSuccess = pinOnSuccess;
   setUnlocked(u);
   closePinModal();
-  if (currentUser !== u) loginAs(u);   // already signed in = just changed/created a PIN
+  if (onSuccess) onSuccess();
+  else if (currentUser !== u) loginAs(u);   // already signed in = just changed/created a PIN
 }
 
 async function submitPin() {

@@ -243,8 +243,8 @@ function updateSwitchUI() {
   if (badge) badge.style.cursor = can ? 'pointer' : 'default';
 }
 
-// mode: 'admin' = only the admin's card, 'one' = a single person's card, 'all' = everyone (admin switching), 'none' = nobody
-let loginCardsMode = 'admin';
+// mode: 'dept' = everyone in the selected department, 'admin' = only the admin, 'one' = a single person, 'all' = everyone (admin switching), 'none' = nobody
+let loginCardsMode = 'dept';
 let loginCardsUserId = null;
 let loginCardsMessage = null;
 
@@ -258,7 +258,7 @@ function showLoginCards(mode, userId, message) {
   cards.replaceChildren();
   Object.entries(USERS).forEach(([id, user]) => {
     const show = user.dept === selectedDept &&
-      (mode === 'all' || (mode === 'admin' && id === adminId) || (mode === 'one' && id === userId));
+      (mode === 'dept' || mode === 'all' || (mode === 'admin' && id === adminId) || (mode === 'one' && id === userId));
     if (!show) return;
 
     const card = document.createElement('div');
@@ -290,7 +290,7 @@ function showLoginCards(mode, userId, message) {
 
 function initLoginFromLink(search) {
   const u = new URLSearchParams(search !== undefined ? search : location.search).get('user');
-  if (!u) { showLoginCards('admin'); return; }
+  if (!u) { showLoginCards('dept'); return; }
   if (!USERS[u]) { showLoginCards('none', null, "This link isn't valid. Ask the admin for your personal link."); return; }
   document.getElementById('dept-select').value = USERS[u].dept;
   showLoginCards('one', u);

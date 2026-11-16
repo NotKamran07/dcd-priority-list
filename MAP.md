@@ -8,7 +8,7 @@
 - `logo.png`: Vista Technology Support PNG logo shared by login screen & header
 
 ## HTML Modal IDs (`index.html`)
-- `login-screen` (PIN-gated sign-in & dept notice) | `modal-overlay` (Add Part to Completed)
+- `login-screen` (public earnings viewer, PIN-gated sign-in & dept notice) | `modal-overlay` (Add Part to Completed)
 - `admin-overlay` (Admin PowerBI/Backorder file upload & download) | `adjust-overlay` (Stock adjustment)
 - `newpart-overlay` (Admin add custom part) | `manage-overlay` (Manage parts, `?` ungraded, `!` new, `~` none, Excel export/import)
 - `hidden-overlay` (Parts hidden by keyword/AT DEPLOYMENT filter) | `pin-overlay` (Enter/Create/Change PIN)
@@ -17,6 +17,7 @@
 
 ## Key Element IDs (`index.html`)
 - **Header & Auth**: `active-user-badge`, `admin-btn`, `pin-btn`, `theme-toggle`, `date-badge`, `last-updated`, `live-status`, `dept-select`
+- **Public Earnings**: `earnings-user-select`, `public-earnings-status`, `public-earnings-content`, `public-earnings-body`
 - **Stats & Tabs**: `loading-bar`, `error-msg`, `stats-bar` (`stat-r1`, `stat-r2`, `stat-total`, `stat-rep-total`, `stat-stock-total`, `stat-done`, `stat-ber-today`), `tab-bar` (`tab-count-main`, `tab-count-done`, `tab-count-history`)
 - **Priority List**: `actions-bar` (`search-input`, `show-done-btn`, `new-btn`, `hidden-btn`, `requests-btn`, `print-menu`, `row-count`), `table-wrap`, `table-body`, `zero-section`, `zero-body`
 - **Completed & History**: `completed-wrap`, `earnings-bar`, `completed-body`, `history-wrap`, `month-filter-bar`, `month-summary-card`, `ms-grade-breakdown`, `target-tracker` (`bar-18`, `bar-21`, `bar-24`), `history-body`, `ungraded-section`, `hist-import-section` (`import-drop-zone`, `import-preview-body`)
@@ -29,4 +30,4 @@
 
 ## Main Functions by File
 - **`firebase-sync.js`**: `safeKey`, `activeParts`, `hashPin`, `startPinFlow`, `submitPin`, `openChangePin`, `initLoginFromLink`, `loginAs`, `switchUser`, `openLinksModal`, `isAdmin`, `applyRoleUI`, `logChange`, `openRequestModal`, `submitRequest`, `openRequestsModal`, `approveRequest`, `rejectRequest`, `startFirebaseListeners`, `scheduleReload`, `applyDcdMoveOnce`, `fetchFile`, `loadXLSX`, `loadCSV`, `setDCD`, `setPartGrade`, `setPartNoDept`, `setPartDept`, `exportPartsSheet`, `importPartsSheet`, `saveNewPart`, `downloadBackup`, `openAdmin`, `downloadCurrentFile`, `uploadAdminFiles`
-- **`app.js`**: `escAttr`, `showToast`, `toggleTheme`, `loadAll`, `loadAllNow`, `buildPartIndex`, `applyKeywordHiding`, `autoAssignFromTeams`, `computeNewParts`, `updatePriorityTotals`, `renderTable`, `setDept`, `sortBy`, `toggleDone`, `resetTicks`, `printList`, `openAdjustModal`, `confirmAdjust`, `addTick`, `removeTick`, `addBer`, `removeBer`, `entryPostCount`, `nextEntry`, `getEffectiveRow`, `updateDoneCount`, `switchTab`, `renderCompleted`, `openModal`, `searchParts`, `confirmAddPart`, `saveToHistory`, `handleImportFile`, `parseImportCSV`, `confirmImport`, `setMonthFilter`, `updateMonthSummary`, `calcCommission`, `updateTargetTracker`, `filterByGrade`, `renderHistory`, `adjustDaysWorked`, `recalculateHistory`, `openManageModal`, `renderManageList`, `openHiddenModal`, `openNewPartModal`
+- **`app.js`**: `escAttr`, `showToast`, `toggleTheme`, `loadAll`, `loadAllNow`, `buildPartIndex`, `applyKeywordHiding`, `autoAssignFromTeams`, `computeNewParts`, `updatePriorityTotals`, `renderTable`, `setDept`, `sortBy`, `toggleDone`, `resetTicks`, `printList`, `openAdjustModal`, `confirmAdjust`, `addTick`, `removeTick`, `addBer`, `removeBer`, `entryPostCount`, `nextEntry`, `getEffectiveRow`, `updateDoneCount`, `switchTab`, `renderCompleted`, `openModal`, `searchParts`, `confirmAddPart`, `saveToHistory`, `handleImportFile`, `parseImportCSV`, `confirmImport`, `setMonthFilter`, `updateMonthSummary`, `calcCommission`, `updateTargetTracker`, `filterByGrade`, `renderHistory`, `initEarningsViewer`, `loadPublicEarnings`, `adjustDaysWorked`, `recalculateHistory`, `openManageModal`, `renderManageList`, `openHiddenModal`, `openNewPartModal`

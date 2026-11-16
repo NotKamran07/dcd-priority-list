@@ -30,6 +30,37 @@
   <div id="login-note" style="display:none;text-align:center;font-size:0.8rem;color:var(--muted);max-width:320px;margin:0 auto 1rem;"></div>
   <div class="user-cards">
   </div>
+  <section id="public-earnings" class="earnings-viewer">
+    <div class="earnings-viewer-heading">
+      <div>
+        <h3>View Earnings</h3>
+        <p>Select a coworker to view their saved work history and earnings.</p>
+      </div>
+      <select id="earnings-user-select" onchange="loadPublicEarnings(this.value)" aria-label="Select coworker">
+        <option value="">Select a coworker</option>
+      </select>
+    </div>
+    <div id="public-earnings-status" role="status" aria-live="polite">Select a coworker to view earnings.</div>
+    <div id="public-earnings-content" style="display:none;">
+      <div class="earnings-viewer-summary">
+        <div class="stat"><span class="stat-label">Parts Completed</span><span class="stat-value" id="public-earnings-parts">0</span></div>
+        <div class="stat"><span class="stat-label">Total Repairs</span><span class="stat-value" id="public-earnings-repairs">0</span></div>
+        <div class="stat"><span class="stat-label">Total Earned</span><span class="stat-value" id="public-earnings-total" style="color:var(--green);">£0.00</span></div>
+      </div>
+      <div class="earnings-viewer-table">
+        <table>
+          <thead>
+            <tr>
+              <th>Date</th><th>Part ID</th><th style="text-align:center;">Repairs</th>
+              <th style="text-align:center;">BER'd</th><th style="text-align:center;">Class</th>
+              <th style="text-align:center;">Earned</th>
+            </tr>
+          </thead>
+          <tbody id="public-earnings-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
 </div>
 
 <!-- === HEADER === -->

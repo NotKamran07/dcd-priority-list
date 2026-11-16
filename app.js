@@ -1952,7 +1952,95 @@ function closeNewPartModal() {
   document.getElementById('newpart-overlay').style.display = 'none';
 }
 
+// === PUBLIC READ-ONLY EARNINGS VIEW ===
+let publicEarningsRequestId = 0;
+
+function initEarningsViewer() {
+  const select = document.getElementById('earnings-user-select');
+  if (!select) return;
+  Object.entries(USERS)
+    .sort(([, a], [, b]) => a.name.localeCompare(b.name))
+    .forEach(([id, user]) => {
+      const option = document.createElement('option');
+      option.value = id;
+      option.textContent = user.name;
+      select.appendChild(option);
+    });
+  select.value = '';
+}
+
+async function loadPublicEarnings(userId) {
+  const requestId = ++publicEarningsRequestId;
+  const status = document.getElementById('public-earnings-status');
+  const content = document.getElementById('public-earnings-content');
+  const tbody = document.getElementById('public-earnings-body');
+  content.style.display = 'none';
+  tbody.replaceChildren();
+  if (!userId || !USERS[userId]) {
+    status.textContent = 'Select a coworker to view earnings.';
+    return;
+  }
+
+  status.textContent = 'Loading ' + USERS[userId].name + "'s earnings…";
+  try {
+    const snapshot = await db.ref('users/' + userId + '/history').once('value');
+    if (requestId !== publicEarningsRequestId) return;
+    const data = snapshot.val() || {};
+    const entries = [];
+    Object.keys(data).sort().reverse().forEach(date => {
+      if (date === '_meta' || !data[date]) return;
+      Object.values(data[date]).forEach(entry => {
+        if (!entry || typeof entry !== 'object') return;
+        const count = Number(entry.count) || 0;
+        const berCount = Number(entry.berCount) || 0;
+        const earned = Number(entry.earned) || (Number(entry.val) * count) || 0;
+        entries.push({ date, partId: entry.partId || '', count, berCount, cls: entry.cls || '', earned, isBerOnly: entry.type === 'ber' });
+      });
+    });
+
+    let repairs = 0;
+    let earned = 0;
+    entries.forEach((entry, index) => {
+      if (!entry.isBerOnly) repairs += entry.count;
+      earned += entry.earned;
+      const row = document.createElement('tr');
+      const date = document.createElement('td');
+      date.textContent = formatHistoryDate(entry.date);
+      const partId = document.createElement('td');
+      partId.textContent = entry.partId;
+      const repairCount = document.createElement('td');
+      repairCount.textContent = entry.count ? String(entry.count) : '—';
+      const berCount = document.createElement('td');
+      berCount.textContent = entry.berCount ? entry.berCount + ' BER' : '—';
+      const grade = document.createElement('td');
+      grade.textContent = entry.cls;
+      const earnedCell = document.createElement('td');
+      earnedCell.textContent = entry.earned ? '£' + entry.earned.toFixed(2) : '—';
+      [date, partId, repairCount, berCount, grade, earnedCell].forEach((cell, cellIndex) => {
+        cell.style.background = index % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
+        if (cellIndex >= 2) cell.style.textAlign = 'center';
+        row.appendChild(cell);
+      });
+      tbody.appendChild(row);
+    });
+
+    document.getElementById('public-earnings-parts').textContent = String(entries.length);
+    document.getElementById('public-earnings-repairs').textContent = String(repairs);
+    document.getElementById('public-earnings-total').textContent = '£' + earned.toFixed(2);
+    content.style.display = 'block';
+    status.textContent = entries.length ? USERS[userId].name + "'s saved earnings." : 'No saved earnings for ' + USERS[userId].name + ' yet.';
+  } catch (error) {
+    if (requestId !== publicEarningsRequestId) return;
+    status.textContent = 'Unable to load earnings. Please try again later.';
+    console.error('Unable to load public earnings for ' + userId, error);
+  }
+}
+
 // === APP BOOTSTRAP ===
-// Sign in from a personal link (?user=Name), or show only the admin sign-in
-if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => initLoginFromLink());
-else initLoginFromLink();
+// Sign in from a personal link (?user=Name), or show users for the selected department.
+function initApp() {
+  initEarningsViewer();
+  initLoginFromLink();
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initApp);
+else initApp();

@@ -992,16 +992,42 @@ document.addEventListener('click', e => {
 });
 
 // === HISTORY LOG & KPI CSV IMPORTER ===
+function getDeduplicatedHistoryEntries() {
+  const importedRepairTags = new Set();
+  Object.entries(historyData).forEach(([date, day]) => {
+    if (date === '_meta' || !day) return;
+    Object.entries(day).forEach(([key, entry]) => {
+      if (!entry || key.startsWith('rc_')) return;
+      Object.values(entry.repairTags || {}).forEach(tag => {
+        importedRepairTags.add(safeKey(String(tag)));
+      });
+    });
+  });
+
+  const seenRepairTags = new Set(importedRepairTags);
+  const entries = [];
+  Object.entries(historyData).forEach(([date, day]) => {
+    if (date === '_meta' || !day) return;
+    Object.entries(day).forEach(([key, entry]) => {
+      if (!entry) return;
+      if (key.startsWith('rc_')) {
+        const repairTag = safeKey(String(entry.repairTag || key.slice(3)));
+        if (seenRepairTags.has(repairTag)) return;
+        seenRepairTags.add(repairTag);
+      }
+      entries.push({ date, ...entry, isBerOnly: entry.type === 'ber', _key: key });
+    });
+  });
+  return entries;
+}
+
 function updateHistoryCount() {
   // Only count repairs for the current month
   const currentMonth = TODAY.slice(0, 7); // YYYY-MM
   let monthTotal = 0;
-  Object.keys(historyData).forEach(date => {
-    if (date === '_meta') return;
-    if (!date.startsWith(currentMonth)) return;
-    const day = historyData[date];
-    if (!day) return;
-    Object.values(day).forEach(entry => { monthTotal += entry.count || 0; });
+  getDeduplicatedHistoryEntries().forEach(entry => {
+    if (!entry.date.startsWith(currentMonth)) return;
+    monthTotal += entry.count || 0;
   });
   document.getElementById('tab-count-history').textContent = monthTotal;
 }
@@ -1591,27 +1617,16 @@ function renderHistory() {
   const tbody = document.getElementById('history-body');
   tbody.innerHTML = '';
 
-  const allEntries = [];
-  Object.keys(historyData).sort().reverse().forEach(date => {
-    if (date === '_meta') return;
-    if (activeMonthFilter !== 'all' && !date.startsWith(activeMonthFilter)) return;
-    const day = historyData[date];
-    if (!day) return;
-    Object.keys(day).forEach(key => {
-      const entry = day[key];
+  const allEntries = getDeduplicatedHistoryEntries()
+    .filter(entry => activeMonthFilter === 'all' || entry.date.startsWith(activeMonthFilter))
+    .filter(entry => {
       // Apply grade filter if active
-      if (activeGradeFilter !== 'all') {
-        if (activeGradeFilter === 'BER') {
-          if (!entry.berCount || entry.berCount === 0) return;
-        } else if (activeGradeFilter === '?') {
-          if ((entry.cls || '').toUpperCase() !== '') return; // show only ungraded
-        } else {
-          if ((entry.cls || '').toUpperCase() !== activeGradeFilter) return;
-        }
-      }
-      allEntries.push({ date, ...entry, isBerOnly: entry.type === 'ber', _key: key });
-    });
-  });
+      if (activeGradeFilter === 'all') return true;
+      if (activeGradeFilter === 'BER') return !!entry.berCount;
+      if (activeGradeFilter === '?') return (entry.cls || '').toUpperCase() === '';
+      return (entry.cls || '').toUpperCase() === activeGradeFilter;
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
 
   // Show grade filter indicator
   const gradeFilterEl = document.getElementById('grade-filter-indicator');
@@ -1709,7 +1724,8 @@ function renderHistory() {
     adjustedDays = Math.max(baseDaysWorked > 0 ? 0.5 : 0, baseDaysWorked + allAdj);
   }
   const avgRepairs = adjustedDays > 0 ? (totalRepairs / adjustedDays).toFixed(1) : '0';
-  document.getElementById('hist-total-parts').textContent = allEntries.length;
+  document.getElementById('hist-total-parts').textContent =
+    new Set(allEntries.map(entry => entry.partId).filter(Boolean)).size;
   document.getElementById('hist-total-repairs').textContent = totalRepairs;
   document.getElementById('hist-total-earned').textContent = `£${totalEarned.toFixed(2)}`;
   // Show diff indicator if days have been adjusted

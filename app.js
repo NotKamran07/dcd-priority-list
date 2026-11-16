@@ -1954,6 +1954,9 @@ function closeNewPartModal() {
 
 // === PUBLIC READ-ONLY EARNINGS VIEW ===
 let publicEarningsRequestId = 0;
+let publicEarningsUserId = null;
+let publicEarningsEntries = [];
+let publicEarningsPeriod = 'current';
 
 function initEarningsViewer() {
   const select = document.getElementById('earnings-user-select');
@@ -1976,6 +1979,8 @@ async function loadPublicEarnings(userId) {
   const tbody = document.getElementById('public-earnings-body');
   content.style.display = 'none';
   tbody.replaceChildren();
+  publicEarningsUserId = null;
+  publicEarningsEntries = [];
   if (!userId || !USERS[userId]) {
     status.textContent = '';
     return;
@@ -1986,7 +1991,7 @@ async function loadPublicEarnings(userId) {
     const snapshot = await db.ref('users/' + userId + '/history').once('value');
     if (requestId !== publicEarningsRequestId) return;
     const data = snapshot.val() || {};
-    const entries = [];
+    publicEarningsEntries = [];
     Object.keys(data).sort().reverse().forEach(date => {
       if (date === '_meta' || !data[date]) return;
       Object.values(data[date]).forEach(entry => {
@@ -1994,46 +1999,88 @@ async function loadPublicEarnings(userId) {
         const count = Number(entry.count) || 0;
         const berCount = Number(entry.berCount) || 0;
         const earned = Number(entry.earned) || (Number(entry.val) * count) || 0;
-        entries.push({ date, partId: entry.partId || '', count, berCount, cls: entry.cls || '', earned, isBerOnly: entry.type === 'ber' });
+        publicEarningsEntries.push({ date, partId: entry.partId || '', count, berCount, cls: entry.cls || '', earned, isBerOnly: entry.type === 'ber' });
       });
     });
 
-    let repairs = 0;
-    let earned = 0;
-    entries.forEach((entry, index) => {
-      if (!entry.isBerOnly) repairs += entry.count;
-      earned += entry.earned;
-      const row = document.createElement('tr');
-      const date = document.createElement('td');
-      date.textContent = formatHistoryDate(entry.date);
-      const partId = document.createElement('td');
-      partId.textContent = entry.partId;
-      const repairCount = document.createElement('td');
-      repairCount.textContent = entry.count ? String(entry.count) : '—';
-      const berCount = document.createElement('td');
-      berCount.textContent = entry.berCount ? entry.berCount + ' BER' : '—';
-      const grade = document.createElement('td');
-      grade.textContent = entry.cls;
-      const earnedCell = document.createElement('td');
-      earnedCell.textContent = entry.earned ? '£' + entry.earned.toFixed(2) : '—';
-      [date, partId, repairCount, berCount, grade, earnedCell].forEach((cell, cellIndex) => {
-        cell.style.background = index % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
-        if (cellIndex >= 2) cell.style.textAlign = 'center';
-        row.appendChild(cell);
-      });
-      tbody.appendChild(row);
+    publicEarningsUserId = userId;
+    publicEarningsPeriod = 'current';
+    const tabs = document.querySelectorAll('#public-earnings-period-tabs .hist-sub-btn');
+    tabs.forEach((tab, index) => tab.classList.toggle('active', index === 0));
+    const monthSelect = document.getElementById('public-earnings-month');
+    monthSelect.replaceChildren();
+    const previousMonths = [...new Set(publicEarningsEntries.map(entry => entry.date.slice(0, 7)))]
+      .filter(month => month < TODAY.slice(0, 7))
+      .sort()
+      .reverse();
+    previousMonths.forEach(month => {
+      const option = document.createElement('option');
+      option.value = month;
+      option.textContent = new Date(month + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+      monthSelect.appendChild(option);
     });
-
-    document.getElementById('public-earnings-parts').textContent = String(entries.length);
-    document.getElementById('public-earnings-repairs').textContent = String(repairs);
-    document.getElementById('public-earnings-total').textContent = '£' + earned.toFixed(2);
+    monthSelect.value = previousMonths[0] || '';
     content.style.display = 'block';
-    status.textContent = entries.length ? USERS[userId].name + "'s saved earnings." : 'No saved earnings for ' + USERS[userId].name + ' yet.';
+    renderPublicEarnings();
   } catch (error) {
     if (requestId !== publicEarningsRequestId) return;
     status.textContent = 'Unable to load earnings. Please try again later.';
     console.error('Unable to load public earnings for ' + userId, error);
   }
+}
+
+function setPublicEarningsPeriod(period, button) {
+  publicEarningsPeriod = period;
+  document.querySelectorAll('#public-earnings-period-tabs .hist-sub-btn').forEach(tab => tab.classList.remove('active'));
+  button.classList.add('active');
+  document.getElementById('public-earnings-month').style.display = period === 'previous' ? '' : 'none';
+  renderPublicEarnings();
+}
+
+function renderPublicEarnings() {
+  if (!publicEarningsUserId) return;
+  const month = publicEarningsPeriod === 'current'
+    ? TODAY.slice(0, 7)
+    : document.getElementById('public-earnings-month').value;
+  const entries = month ? publicEarningsEntries.filter(entry => entry.date.startsWith(month)) : [];
+  const tbody = document.getElementById('public-earnings-body');
+  tbody.replaceChildren();
+
+  let repairs = 0;
+  let earned = 0;
+  entries.forEach((entry, index) => {
+    if (!entry.isBerOnly) repairs += entry.count;
+    earned += entry.earned;
+    const row = document.createElement('tr');
+    const date = document.createElement('td');
+    date.textContent = formatHistoryDate(entry.date);
+    const partId = document.createElement('td');
+    partId.textContent = entry.partId;
+    const repairCount = document.createElement('td');
+    repairCount.textContent = entry.count ? String(entry.count) : '—';
+    const berCount = document.createElement('td');
+    berCount.textContent = entry.berCount ? entry.berCount + ' BER' : '—';
+    const grade = document.createElement('td');
+    grade.textContent = entry.cls;
+    const earnedCell = document.createElement('td');
+    earnedCell.textContent = entry.earned ? '£' + entry.earned.toFixed(2) : '—';
+    [date, partId, repairCount, berCount, grade, earnedCell].forEach((cell, cellIndex) => {
+      cell.style.background = index % 2 === 0 ? 'var(--surface)' : 'var(--surface2)';
+      if (cellIndex >= 2) cell.style.textAlign = 'center';
+      row.appendChild(cell);
+    });
+    tbody.appendChild(row);
+  });
+
+  document.getElementById('public-earnings-parts').textContent = String(entries.length);
+  document.getElementById('public-earnings-repairs').textContent = String(repairs);
+  document.getElementById('public-earnings-total').textContent = '£' + earned.toFixed(2);
+  const monthLabel = month
+    ? new Date(month + '-01T12:00:00').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+    : 'previous months';
+  document.getElementById('public-earnings-status').textContent = entries.length
+    ? USERS[publicEarningsUserId].name + "'s earnings for " + monthLabel + '.'
+    : 'No earnings recorded for ' + monthLabel + '.';
 }
 
 // === APP BOOTSTRAP ===

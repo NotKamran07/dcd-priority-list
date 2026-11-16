@@ -41,6 +41,13 @@
     </div>
     <div id="public-earnings-status" role="status" aria-live="polite"></div>
     <div id="public-earnings-content" style="display:none;">
+      <div id="public-earnings-period-tabs" style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;border-bottom:1px solid var(--border);">
+        <button class="hist-sub-btn active" onclick="setPublicEarningsPeriod('current', this)">Current Month</button>
+        <button class="hist-sub-btn" onclick="setPublicEarningsPeriod('previous', this)">Previous Months</button>
+        <select id="public-earnings-month" onchange="renderPublicEarnings()" aria-label="Select previous month" style="display:none;padding:0.4rem 0.6rem;border-radius:4px;background:var(--surface2);color:var(--text);border:1px solid var(--border);font:inherit;font-size:0.68rem;">
+          <option value="">Select a month</option>
+        </select>
+      </div>
       <div class="earnings-viewer-summary">
         <div class="stat"><span class="stat-label">Parts Completed</span><span class="stat-value" id="public-earnings-parts">0</span></div>
         <div class="stat"><span class="stat-label">Total Repairs</span><span class="stat-value" id="public-earnings-repairs">0</span></div>

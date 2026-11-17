@@ -81,7 +81,7 @@ body.light-mode .toggle-thumb { left: 17px; }
 .tab-btn.active .tab-count { background: var(--accent); color: white; }
 .tab-btn.tab-done.active { border-bottom-color: var(--green); }
 .tab-btn.tab-history.active { border-bottom-color: #a855f7; }
-.tab-btn.tab-rc-earnings { margin-left: auto; color: var(--text); border: 1px solid var(--border); border-radius: 3px; }
+.tab-btn.tab-rc-earnings { margin-left: auto; margin-bottom: 0; padding: 0.35rem 0.75rem; color: var(--text); border: 1px solid var(--border); border-radius: 999px; }
 .tab-btn.tab-rc-earnings:hover { border-color: var(--muted); }
 .tab-btn.tab-rc-earnings.active { color: var(--text); border-color: var(--border); }
 

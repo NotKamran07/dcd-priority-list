@@ -25,7 +25,7 @@
 
 ## Firebase Realtime Database Paths (`firebase-sync.js`)
 - `users/{uid}/ticks/{TODAY}`, `users/{uid}/ber/{TODAY}`, `users/{uid}/history` (`_meta/adj/{month}`)
-- `rcEarningsUsers/{uid}` stores assigned RC-imported users with display name, initials, color, and department; choosing No Department skips that user's import rows and does not create a profile
+- `rcEarningsUsers/{uid}` stores RC-imported users, including `dept: none` for saved unassigned users whose rows are skipped; department review is shown only for new CSV users
 - `allTicks/{TODAY}`, `userPins/{uid}`, `files/{powerbi|backorder}`, `filesUploadedAt`, `lastUpdated`
 - `dcdParts`, `deptParts/{PC|PCB|Printers}`, `partGrades`, `noDept`, `customParts`, `stockAdjustments`
 - `changeRequests`, `changeLog`, `autoAssigned`, `migrations/{dcdMoveToOwnDept1|dcdRemoveTemporary1|gradeFixes1}`

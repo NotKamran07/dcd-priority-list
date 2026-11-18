@@ -2011,6 +2011,7 @@ function populateEarningsUsers(selectedUserId) {
   Object.entries(USERS)
     .sort(([, a], [, b]) => a.name.localeCompare(b.name))
     .forEach(([id, user]) => {
+      if (RC_EARNINGS_NO_DEPARTMENT.has(id)) return;
       const option = document.createElement('option');
       option.value = id;
       option.textContent = user.name;
@@ -2045,13 +2046,21 @@ const RC_EARNINGS_USER_DETAILS = {
   ZAKWATERS: { name: 'Zak Waters', initials: 'ZW', color: '#818cf8' }
 };
 
+const RC_EARNINGS_NO_DEPARTMENT = new Set();
+
 async function loadRCEarningsUsers() {
   const snapshot = await db.ref('rcEarningsUsers').once('value');
   const profiles = snapshot.val() || {};
   const validDepartments = new Set(['DCD', 'PC', 'PCB', 'Printers']);
+  RC_EARNINGS_NO_DEPARTMENT.clear();
   Object.entries(profiles).forEach(([id, profile]) => {
-    if (!profile || !/^[A-Za-z0-9_-]+$/.test(id) || !profile.name || !validDepartments.has(profile.dept)) {
+    if (!profile || !/^[A-Za-z0-9_-]+$/.test(id) || !profile.name ||
+        (!validDepartments.has(profile.dept) && profile.dept !== 'none')) {
       throw new Error('Invalid saved RC earnings user profile: ' + id);
+    }
+    if (profile.dept === 'none') {
+      RC_EARNINGS_NO_DEPARTMENT.add(id);
+      return;
     }
     const existing = USERS[id] || {};
     const details = RC_EARNINGS_USER_DETAILS[id];
@@ -2168,12 +2177,14 @@ function parseRCEarningsCSV(text) {
     seenRepairs.add(dedupKey);
     const existing = USERS[userId];
     const details = RC_EARNINGS_USER_DETAILS[userId];
+    const savedNoDepartment = RC_EARNINGS_NO_DEPARTMENT.has(userId) || (existing && !existing.dept);
     if (!people.has(userId)) {
       people.set(userId, {
         id: userId,
         csvName: person,
         name: details ? details.name : (existing ? existing.name : person.toLowerCase().replace(/(^|[\s_-])([a-z])/g, (match, sep, letter) => sep + letter.toUpperCase())),
-        dept: existing ? existing.dept : ''
+        dept: savedNoDepartment ? 'none' : (existing ? existing.dept : ''),
+        needsAssignment: !existing && !savedNoDepartment
       });
     }
     records.push({ userId, repairTag, partId, date, status });
@@ -2292,7 +2303,7 @@ async function handleRCEarningsFile(input) {
       skipped.invalid + ' invalid rows, and ' + skipped.duplicate + ' duplicate repair tags will be skipped.';
     renderRCEarningsPeople();
     preview.style.display = 'block';
-    status.textContent = 'Review the user list and department assignments before importing.';
+    status.textContent = 'Assign a department to any new users before importing.';
     updateRCEarningsImportButton();
   } catch (error) {
     rcEarningsImport = null;
@@ -2306,7 +2317,12 @@ async function handleRCEarningsFile(input) {
 function renderRCEarningsPeople() {
   const tbody = document.getElementById('rc-earnings-people-body');
   tbody.replaceChildren();
-  rcEarningsImport.people.forEach(person => {
+  const peopleNeedingAssignment = rcEarningsImport.people.filter(person => person.needsAssignment);
+  const peopleTable = tbody.closest('.rc-earnings-people');
+  const assignmentHelp = document.getElementById('rc-earnings-assignment-help');
+  peopleTable.style.display = peopleNeedingAssignment.length ? '' : 'none';
+  assignmentHelp.style.display = peopleNeedingAssignment.length ? '' : 'none';
+  peopleNeedingAssignment.forEach(person => {
     const row = document.createElement('tr');
     row.dataset.userId = person.id;
     const csvName = document.createElement('td');
@@ -2324,7 +2340,7 @@ function renderRCEarningsPeople() {
     deptSelect.add(new Option('Choose department', ''));
     [['DCD', 'DCD'], ['PC', 'PC'], ['PCB', 'PCB'], ['Printers', 'Printers & Peripherals']]
       .forEach(([value, label]) => deptSelect.add(new Option(label, value)));
-    deptSelect.add(new Option('No Department — skip user', 'none'));
+    deptSelect.add(new Option('No Department', 'none'));
     deptSelect.value = person.dept;
     deptSelect.addEventListener('change', updateRCEarningsImportButton);
     deptCell.appendChild(deptSelect);
@@ -2335,17 +2351,20 @@ function renderRCEarningsPeople() {
 
 function updateRCEarningsImportButton() {
   const rows = [...document.querySelectorAll('#rc-earnings-people-body tr')];
-  const assignedCount = rows.filter(row => row.querySelector('select').value !== 'none').length;
-  const ready = assignedCount > 0 && rows.every(row => {
-    const department = row.querySelector('select').value;
-    return department === 'none' || (row.querySelector('input').value.trim() && department);
+  const departments = new Map(rcEarningsImport.people.map(person => [person.id, person.dept]));
+  rows.forEach(row => departments.set(row.dataset.userId, row.querySelector('select').value));
+  const ready = departments.size > 0 && [...departments].every(([id, department]) => {
+    if (department === 'none') return true;
+    if (!['DCD', 'PC', 'PCB', 'Printers'].includes(department)) return false;
+    const row = rows.find(candidate => candidate.dataset.userId === id);
+    return !row || row.querySelector('input').value.trim().length > 0;
   });
   document.getElementById('rc-earnings-import-btn').disabled = !ready;
 
   if (rcEarningsImport) {
-    const excludedUserIds = new Set(rows
-      .filter(row => row.querySelector('select').value === 'none')
-      .map(row => row.dataset.userId));
+    const excludedUserIds = new Set([...departments]
+      .filter(([, department]) => department === 'none')
+      .map(([id]) => id));
     const excludedRows = rcEarningsImport.records.filter(record => excludedUserIds.has(record.userId)).length;
     const skipped = rcEarningsImport.skipped;
     document.getElementById('rc-earnings-preview-summary').textContent =
@@ -2366,24 +2385,32 @@ async function importRCEarnings() {
   try {
     const profiles = new Map();
     const validDepartments = new Set(['DCD', 'PC', 'PCB', 'Printers']);
+    const departmentByUser = new Map(rcEarningsImport.people.map(person => [person.id, person.dept]));
     document.querySelectorAll('#rc-earnings-people-body tr').forEach(row => {
       const id = row.dataset.userId;
-      const name = row.querySelector('input').value.trim();
       const dept = row.querySelector('select').value;
-      const details = RC_EARNINGS_USER_DETAILS[id];
-      if (dept === 'none') return;
-      if (!id || !/^[A-Za-z0-9_-]+$/.test(id) || !name || !validDepartments.has(dept)) {
+      departmentByUser.set(id, dept);
+    });
+    rcEarningsImport.people.forEach(person => {
+      const dept = departmentByUser.get(person.id);
+      const details = RC_EARNINGS_USER_DETAILS[person.id];
+      const input = person.needsAssignment
+        ? document.querySelector('#rc-earnings-people-body tr[data-user-id="' + person.id + '"] input')
+        : null;
+      const name = input ? (input.value.trim() || person.name) : person.name;
+      if (!/^[A-Za-z0-9_-]+$/.test(person.id) ||
+          (dept !== 'none' && (!name || !validDepartments.has(dept)))) {
         throw new Error('Every CSV user must have a valid display name and department.');
       }
-      profiles.set(id, {
+      profiles.set(person.id, {
         name: details ? details.name : name,
         dept,
         initials: details ? details.initials : name.split(/\s+/).slice(0, 2).map(part => part[0]).join('').toUpperCase(),
-        color: details ? details.color : (USERS[id] && USERS[id].color) || '#64748b'
+        color: details ? details.color : (USERS[person.id] && USERS[person.id].color) || '#64748b'
       });
     });
-    if (!profiles.size) throw new Error('Assign a department to at least one user to import earnings.');
-    const recordsToImport = rcEarningsImport.records.filter(record => profiles.has(record.userId));
+    const recordsToImport = rcEarningsImport.records.filter(record =>
+      profiles.has(record.userId) && profiles.get(record.userId).dept !== 'none');
     const noDepartmentRows = rcEarningsImport.records.length - recordsToImport.length;
 
     const gradeSnapshot = await GRADES_REF.once('value');
@@ -2410,7 +2437,9 @@ async function importRCEarnings() {
     }));
 
     const updates = {};
-    const createdCount = [...profiles.keys()].filter(id => !Object.prototype.hasOwnProperty.call(USERS, id)).length;
+    const createdCount = [...profiles.entries()]
+      .filter(([id, profile]) => profile.dept !== 'none' && !Object.prototype.hasOwnProperty.call(USERS, id))
+      .length;
     profiles.forEach((profile, id) => {
       updates['rcEarningsUsers/' + id] = profile;
     });
@@ -2424,6 +2453,11 @@ async function importRCEarnings() {
     await db.ref().update(updates);
 
     profiles.forEach((profile, id) => {
+      if (profile.dept === 'none') {
+        RC_EARNINGS_NO_DEPARTMENT.add(id);
+        return;
+      }
+      RC_EARNINGS_NO_DEPARTMENT.delete(id);
       const existing = USERS[id] || {};
       USERS[id] = {
         ...existing,
@@ -2445,7 +2479,7 @@ async function importRCEarnings() {
       skipped.weekend + ' weekend, ' + skipped.status + ' unsupported-status, ' +
       skipped.invalid + ' invalid, ' + skipped.duplicate + ' duplicate, and ' +
       noDepartmentRows + ' No Department rows. Deduplicated ' + deduplicatedRows +
-      ' repairs matched by repair tag. No Department users were not created.';
+      ' repairs matched by repair tag. No Department users were saved as unassigned.';
     document.getElementById('rc-earnings-preview').style.display = 'none';
     rcEarningsImport = null;
     if (createdCount) status.textContent += ' Created ' + createdCount + ' user profile' + (createdCount === 1 ? '' : 's') + '.';

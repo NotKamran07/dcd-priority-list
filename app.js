@@ -162,7 +162,12 @@ async function loadAllNow(quiet) {
     pbiRows.forEach(r => {
       const id = (r['Part ID'] || '').toString().trim();
       if (!id || !activeParts().has(id)) return;
-      pbiMap[id] = { repReq: Number(r['Rep Req']) || 0, totalBad: Number(r['Total Bad']) || 0, team: (r['Repair Team'] || '').toString().trim() };
+        pbiMap[id] = {
+          vrsCdf: Number(r['VRS CDF']) || 0,
+          repReq: Number(r['Rep Req']) || 0,
+          totalBad: Number(r['Total Bad']) || 0,
+          team: (r['Repair Team'] || '').toString().trim()
+        };
     });
 
     const boMap = {};
@@ -185,12 +190,14 @@ async function loadAllNow(quiet) {
 
     Object.keys(boMap).forEach(id => {
       if (excludedByNote.has(id)) return; // Skip excluded parts
-      const bo = boMap[id], pbi = pbiMap[id] || { repReq: 0, totalBad: 0, team: '' };
+      const bo = boMap[id];
+      const pbi = pbiMap[id] || { vrsCdf: 0, repReq: 0, totalBad: 0, team: '' };
+      if (pbi.vrsCdf === 0 && pbi.repReq === 0) return;
       const cls = gradeMap[id] || '';
       // Backorder report Qty is the primary source of truth for stock quantity.
       // Only fall back to PowerBI Total Bad if the part isn't on the backorder report at all.
       let totalQty = bo.totalQty;
-      rank1.push({ Priority: 1, 'Part ID': id, 'Repair Team': pbi.team, 'Rep Req': pbi.repReq, 'Open Orders': bo.count, 'Total Qty': totalQty, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
+      rank1.push({ Priority: 1, 'Part ID': id, 'Repair Team': pbi.team, 'VRS CDF': pbi.vrsCdf || 0, 'Rep Req': pbi.repReq, 'Open Orders': bo.count, 'Total Qty': totalQty, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
     });
     rank1.sort((a, b) => b['Open Orders'] - a['Open Orders']);
 
@@ -198,9 +205,9 @@ async function loadAllNow(quiet) {
       if (boIds.has(id)) return;
       if (excludedByNote.has(id)) return; // hidden by backorder keyword filter
       const pbi = pbiMap[id];
-      if (pbi.repReq === 0) return;
+      if (pbi.vrsCdf === 0 && pbi.repReq === 0) return;
       const cls = gradeMap[id] || '';
-      rank2.push({ Priority: 2, 'Part ID': id, 'Repair Team': pbi.team, 'Rep Req': pbi.repReq, 'Open Orders': '', 'Total Qty': pbi.totalBad, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
+      rank2.push({ Priority: 2, 'Part ID': id, 'Repair Team': pbi.team, 'VRS CDF': pbi.vrsCdf, 'Rep Req': pbi.repReq, 'Open Orders': '', 'Total Qty': pbi.totalBad, 'Part Class': cls, Value: GRADE_VALUE[cls] ?? '' });
     });
     rank2.sort((a, b) => b['Rep Req'] - a['Rep Req']);
 
@@ -257,7 +264,9 @@ function buildPartIndex(pbiRows, boRows) {
     if (!looksLikePartId(id)) return;
     all.add(id);
     if (r['Repair Team'] && !teams[id]) teams[id] = String(r['Repair Team']).trim();
-    if (Number(r['Rep Req']) > 0) active.add(id);
+    const vrsCdf = Number(r['VRS CDF']) || 0;
+    const repReq = Number(r['Rep Req']) || 0;
+    if (vrsCdf > 0 || repReq > 0) active.add(id);
   });
   boRows.forEach(r => {
     const id = (r['Part ID'] || '').toString().trim();
@@ -382,6 +391,7 @@ function renderTable() {
   updatePriorityTotals();
   const search = document.getElementById('search-input').value.toLowerCase();
   let rows = outputRows.filter(r => {
+    if ((Number(r['VRS CDF']) || 0) === 0 && (Number(r['Rep Req']) || 0) === 0) return false;
     if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
     const eff = getEffectiveRow(r);
     // Only hide when FULLY done (open orders AND rep req both at 0)
@@ -465,6 +475,7 @@ function renderTable() {
       <td><span class="badge badge-${displayPriority}">${displayPriority}</span></td>
       <td class="part-id">${partId}</td>
       <td>${eff['Repair Team'] || ''}</td>
+      <td class="num-cell">${eff['VRS CDF'] !== undefined ? eff['VRS CDF'] : ''}</td>
       <td class="num-cell">${eff['Rep Req'] !== '' ? eff['Rep Req'] : ''}</td>
       <td class="num-cell">${openOrdersDisplay !== '' ? openOrdersDisplay : ''}</td>
       <td class="num-cell">${eff['Total Qty'] !== '' ? eff['Total Qty'] : ''}${eff._manualAdj ? '<span style="font-size:0.6rem;color:var(--accent);margin-left:3px;">(-' + eff._manualAdj + ')</span>' : ''}</td>
@@ -479,6 +490,7 @@ function renderTable() {
   const zeroRows = outputRows.filter(r => {
     const eff = getEffectiveRow(r);
     if (deptFilter !== 'all' && (r['Repair Team'] || '').trim() !== deptFilter) return false;
+    if ((Number(eff['VRS CDF']) || 0) === 0 && (Number(eff['Rep Req']) || 0) === 0) return false;
     return (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') && !eff._fullyDone;
   });
   const zeroSection = document.getElementById('zero-section');
@@ -495,6 +507,7 @@ function renderTable() {
         <td><span class="zero-badge">${row.Priority}</span></td>
         <td class="part-id">${row['Part ID']}</td>
         <td>${row['Repair Team'] || ''}</td>
+        <td class="num-cell">${row['VRS CDF'] !== undefined ? row['VRS CDF'] : ''}</td>
         <td class="num-cell">${row['Rep Req'] !== '' ? row['Rep Req'] : ''}</td>
         <td class="num-cell">—</td>
         <td class="num-cell grade-${cls}">${cls}</td>

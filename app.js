@@ -415,13 +415,14 @@ function renderTable() {
     const tickCount = getTickCount(row['Part ID']);
     const isDone = tickCount > 0;
     const isFullyDone = eff._fullyDone || false;
+    const isOutOfStock = eff['Total Qty'] <= 0;
 
     // Only promote to rank 2 when open orders fully reach 0
     let effPriority = eff.Priority;
     if (isFullyDone && eff.Priority === 1 && eff['Open Orders'] === 0) effPriority = 2;
 
     const tr = document.createElement('tr');
-    tr.className = isFullyDone ? 'completed' : (effPriority === 1 ? 'rank1' : 'rank2');
+    tr.className = isFullyDone || isOutOfStock ? 'completed' : (effPriority === 1 ? 'rank1' : 'rank2');
     const cls = eff['Part Class'] || '';
     const valStr = typeof eff.Value === 'number' ? `£${eff.Value.toFixed(2)}` : '';
     const partId = eff['Part ID'];
@@ -444,8 +445,7 @@ function renderTable() {
     }, 0);
     const usedQty = allTicksForPart + berCount;
     const plusDisabled = origTotalQty <= 0 || usedQty >= origTotalQty;
-    // BER + button in Completed Today is never limited by stock - it's a record of completed work
-    const berPlusDisabled = false;
+    const berPlusDisabled = isOutOfStock;
     // Build user tick indicators
     const userIndicators = Object.entries(allUserTicks).map(([uid, userTicks]) => {
       if (!userTicks) return '';
@@ -469,7 +469,7 @@ function renderTable() {
         <div class="ber-counter">
           <button class="ber-btn ber-minus" onclick="removeBer('${partId}')" ${berCount === 0 ? 'disabled' : ''}>−</button>
           <span class="ber-num ${berCount > 0 ? 'berred' : ''}">${berCount}</span>
-          <button class="ber-btn" onclick="addBer('${partId}')" ${berPlusDisabled ? 'disabled' : ''}>+</button>
+          <button class="ber-btn" onclick="addBer('${partId}', true)" ${berPlusDisabled ? 'disabled' : ''}>+</button>
         </div>
       </td>
       <td><span class="badge badge-${displayPriority}">${displayPriority}</span></td>
@@ -656,10 +656,21 @@ function getFilteredBerCount(partId) {
   return entryPostCount(bers[safeKey(partId)]);
 }
 
-function addBer(partId) {
+function addBer(partId, limitToStock = false) {
   const key = safeKey(partId);
-  const currentBer = getBerCount(partId);
   // Allow BER even for parts not in outputRows (e.g. manually added in Completed Today)
+  if (limitToStock) {
+    const row = outputRows.find(r => r['Part ID'] === partId);
+    if (!row) return;
+    const origTotalQty = typeof row['Total Qty'] === 'number' ? row['Total Qty'] : 0;
+    const maxBerCount = Math.max(0, origTotalQty - getFilteredAllUserTickCount(partId) - (stockAdjustments[key] || 0));
+    BER_REF.child(key).transaction(b => {
+      const next = nextEntry(b, 1);
+      if (!next || entryPostCount(next) > maxBerCount) return;
+      return next;
+    });
+    return;
+  }
   BER_REF.child(key).transaction(b => nextEntry(b, 1));
 }
 

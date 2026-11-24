@@ -391,7 +391,7 @@ function renderTable() {
   updatePriorityTotals();
   const search = document.getElementById('search-input').value.toLowerCase();
   let rows = outputRows.filter(r => {
-    if ((Number(r['VRS CDF']) || 0) === 0 && (Number(r['Rep Req']) || 0) === 0) return false;
+    if (!(Number(r['Rep Req']) > 0)) return false;
     if (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') return false;
     const eff = getEffectiveRow(r);
     // Only hide when FULLY done (open orders AND rep req both at 0)
@@ -490,7 +490,7 @@ function renderTable() {
   const zeroRows = outputRows.filter(r => {
     const eff = getEffectiveRow(r);
     if (deptFilter !== 'all' && (r['Repair Team'] || '').trim() !== deptFilter) return false;
-    if ((Number(eff['VRS CDF']) || 0) === 0 && (Number(eff['Rep Req']) || 0) === 0) return false;
+    if (!(Number(r['Rep Req']) > 0)) return false;
     return (Number(r['Total Qty']) === 0 || r['Total Qty'] === '') && !eff._fullyDone;
   });
   const zeroSection = document.getElementById('zero-section');

@@ -191,7 +191,7 @@
 <div id="rc-earnings-wrap" style="display:none;padding:1.5rem 2.5rem 3rem;">
   <section class="earnings-viewer">
     <h2 class="rc-earnings-title">RC Earnings Upload</h2>
-    <p class="rc-earnings-help">Upload the Repair Center CSV. COMP and NFF count as completed repairs; BER counts as BER. Weekend work is excluded. Re-uploading a file updates matching repair tags without duplicating earnings.</p>
+    <p class="rc-earnings-help">Upload the Repair Center CSV. COMP and NFF count as completed repairs; BER counts as BER. Weekend work is excluded. Repairs already entered in the app on the same date for the same part are skipped, as are matching repair tags.</p>
     <label class="rc-earnings-file">
       <span>Choose RC earnings CSV</span>
       <input id="rc-earnings-file" type="file" accept=".csv,text/csv" onchange="handleRCEarningsFile(this)"/>

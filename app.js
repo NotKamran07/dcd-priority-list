@@ -2255,31 +2255,60 @@ function findRCEarningsUserId(person) {
 
 function reconcileRCEarningsHistory(history, records, gradeMap) {
   const dailyRepairTags = new Set();
+  const manualCoverage = new Map();
+  const coverageKey = (date, partId, isBer) =>
+    date + '|' + safeKey(partId) + '|' + (isBer ? 'ber' : 'repair');
+  const addCoverage = (date, partId, isBer, count) => {
+    if (!partId || count <= 0) return;
+    const key = coverageKey(date, partId, isBer);
+    manualCoverage.set(key, (manualCoverage.get(key) || 0) + count);
+  };
+  const consumeManualCoverage = (date, partId, isBer) => {
+    if (!partId) return false;
+    const key = coverageKey(date, partId, isBer);
+    const count = manualCoverage.get(key) || 0;
+    if (!count) return false;
+    if (count === 1) manualCoverage.delete(key);
+    else manualCoverage.set(key, count - 1);
+    return true;
+  };
+
   Object.entries(history).forEach(([date, day]) => {
     if (date === '_meta' || !day) return;
     Object.entries(day).forEach(([key, entry]) => {
       if (!entry || key.startsWith('rc_')) return;
-      Object.values(entry.repairTags || {}).forEach(tag => dailyRepairTags.add(safeKey(String(tag))));
+      const repairTags = new Set(Object.values(entry.repairTags || {}).map(tag => safeKey(String(tag))));
+      repairTags.forEach(tag => dailyRepairTags.add(tag));
+      const taggedCount = repairTags.size;
+      const count = Math.max(0, Number(entry.count) || 0);
+      const berCount = Math.max(0, Number(entry.berCount) || 0);
+      addCoverage(date, entry.partId, false, Math.max(0, count - taggedCount));
+      addCoverage(date, entry.partId, true, Math.max(0, berCount - (count > 0 ? 0 : taggedCount)));
     });
   });
 
   const updates = {};
   const duplicateTags = new Set();
+  const coveredRepairTags = new Set();
   Object.entries(history).forEach(([date, day]) => {
     if (date === '_meta' || !day) return;
     Object.entries(day).forEach(([key, entry]) => {
       if (!key.startsWith('rc_') || !entry) return;
       const repairTag = String(entry.repairTag || key.slice(3));
-      if (!dailyRepairTags.has(safeKey(repairTag))) return;
+      const isBer = entry.type === 'ber' || (!(Number(entry.count) || 0) && (Number(entry.berCount) || 0) > 0);
+      if (!dailyRepairTags.has(safeKey(repairTag)) && !consumeManualCoverage(date, entry.partId, isBer)) return;
       updates[date + '/' + key] = null;
       duplicateTags.add(safeKey(repairTag));
+      coveredRepairTags.add(safeKey(repairTag));
     });
   });
 
   records.forEach(record => {
     const historyKey = 'rc_' + safeKey(record.repairTag);
     const path = record.date + '/' + historyKey;
-    if (dailyRepairTags.has(safeKey(record.repairTag))) {
+    if (dailyRepairTags.has(safeKey(record.repairTag)) ||
+        coveredRepairTags.has(safeKey(record.repairTag)) ||
+        consumeManualCoverage(record.date, record.partId, record.status === 'BER')) {
       updates[path] = null;
       duplicateTags.add(safeKey(record.repairTag));
       return;
@@ -2503,7 +2532,7 @@ async function importRCEarnings() {
       skipped.weekend + ' weekend, ' + skipped.status + ' unsupported-status, ' +
       skipped.invalid + ' invalid, ' + skipped.duplicate + ' duplicate, and ' +
       noDepartmentRows + ' No Department rows. Deduplicated ' + deduplicatedRows +
-      ' repairs matched by repair tag. No Department users were saved as unassigned.';
+      ' repairs already recorded by repair tag or matching date and part. No Department users were saved as unassigned.';
     document.getElementById('rc-earnings-preview').style.display = 'none';
     rcEarningsImport = null;
     if (createdCount) status.textContent += ' Created ' + createdCount + ' user profile' + (createdCount === 1 ? '' : 's') + '.';
